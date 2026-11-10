@@ -19,6 +19,8 @@ function App() {
   const [mode, setMode] = useState('trending')
   const [reloadKey, setReloadKey] = useState(0)
   const [query, setQuery] = useState('')
+  const [aiEnabled, setAiEnabled] = useState(true)
+  const [aiInfo, setAiInfo] = useState(null)
   const [tracks, setTracks] = useState([])
   const [searchResults, setSearchResults] = useState([])
   const [favorites, setFavorites] = useState(() => readStorage('yinn-lycs-favorites', []))
@@ -52,6 +54,7 @@ function App() {
     const term = query.trim()
     if (term.length < 2) {
       setSearchResults([])
+      setAiInfo(null)
       setSearchLoading(false)
       return
     }
@@ -60,8 +63,12 @@ function App() {
     searchTimer.current = setTimeout(() => {
       setSearchLoading(true)
       setError('')
-      searchTracks(term)
-        .then(data => { if (alive) setSearchResults(data) })
+      searchTracks(term, aiEnabled)
+        .then(payload => {
+          if (!alive) return
+          setSearchResults(payload.data)
+          setAiInfo(payload.ai)
+        })
         .catch(err => { if (alive) setError(err.message || 'Pencarian gagal.') })
         .finally(() => { if (alive) setSearchLoading(false) })
     }, 350)
@@ -69,7 +76,7 @@ function App() {
       alive = false
       clearTimeout(searchTimer.current)
     }
-  }, [query, tab])
+  }, [query, tab, aiEnabled])
 
   useEffect(() => {
     localStorage.setItem('yinn-lycs-favorites', JSON.stringify(favorites))
@@ -97,7 +104,12 @@ function App() {
   }, [tab, searchResults, favorites, history, tracks])
 
   const playTrack = useCallback((track, sourceList) => {
-    if (!track || !track.id || !audioRef.current) return
+    if (!track || !track.id) return
+    if (track.source === 'apple' && track.trackViewUrl) {
+      window.open(track.trackViewUrl, '_blank', 'noopener,noreferrer')
+      return
+    }
+    if (!audioRef.current) return
     if (activeTrack && activeTrack.id === track.id) {
       if (audioRef.current.paused) {
         audioRef.current.play().catch(() => setError('Browser tidak dapat memutar audio ini.'))
@@ -196,7 +208,7 @@ function App() {
         <section className="hero">
           <div className="eyebrow">YOUR PERSONAL MUSIC SPACE</div>
           <h1>Temukan irama<br /><span>versi kamu.</span></h1>
-          <p>Jelajahi musik independen dari katalog terbuka Audius dan putar langsung.</p>
+          <p>Jelajahi katalog musik dari berbagai negara. Putar lagu Audius dan temukan rilisan global melalui Apple Music.</p>
           <button className="hero-button" onClick={() => { setTab('Home'); setMode('trending') }}>Jelajahi musik <span>↗</span></button>
           <div className="hero-orb orb-one" />
           <div className="hero-orb orb-two" />
@@ -214,6 +226,8 @@ function App() {
               </select>
             </label>
             <label>Warna aksen <input type="color" value={accent} onChange={event => setAccent(event.target.value)} /></label>
+            <div className="theme-presets"><span>Preset warna</span><div>{['#9be7ff','#b9a0ff','#8ee4b8','#ff9fc5','#ffc27d'].map(color => <button key={color} style={{'--swatch':color}} aria-label={'Pilih warna '+color} onClick={() => setAccent(color)} />)}</div></div>
+            <button className="night-mode-toggle" onClick={() => setTheme(theme === 'midnight' ? 'liquid' : 'midnight')}>{theme === 'midnight' ? '☀ Kembali ke Liquid Glass' : '☾ Aktifkan mode malam'}</button>
           </section>
         )}
 
@@ -229,8 +243,10 @@ function App() {
 
         {tab === 'Search' && (
           <section className="search-section">
-            <div className="search-box glass-panel"><span>⌕</span><input autoFocus placeholder="Cari judul lagu atau nama artis..." value={query} onChange={event => setQuery(event.target.value)} /><button onClick={() => setQuery('')} aria-label="Hapus pencarian">×</button></div>
-            <p className="search-hint">Masukkan minimal 2 karakter untuk mencari musik online.</p>
+            <div className="search-box glass-panel"><span>⌕</span><input autoFocus placeholder="Cari judul, artis, atau potongan lirik..." value={query} onChange={event => setQuery(event.target.value)} /><button onClick={() => setQuery('')} aria-label="Hapus pencarian">×</button></div>
+            <div className="search-tools"><p className="search-hint">Cari judul, penyanyi, atau potongan lirik lagu.</p><button className={'ai-toggle' + (aiEnabled ? ' enabled' : '')} onClick={() => setAiEnabled(value => !value)}><span>✦</span> AI Lirik {aiEnabled ? 'ON' : 'OFF'}</button></div>
+            {aiEnabled && aiInfo && !aiInfo.configured && <div className="ai-notice">✦ AI lirik belum diaktifkan. Tambahkan <code>GEMINI_API_KEY</code> di Vercel agar pencarian potongan lirik bisa mengenali judul lagu.</div>}
+            {aiInfo?.used && <div className="ai-match-banner"><div className="ai-banner-title">✦ AI menemukan kemungkinan lagu</div>{aiInfo.matches.map((match,index) => <div className="ai-match-row" key={match.searchQuery + index}><b>{match.title}</b><span>{match.artist}</span><small>{match.reason}</small></div>)}</div>}
           </section>
         )}
 
@@ -249,15 +265,17 @@ function App() {
           <div className="track-grid">
             {visibleTracks.map((track, index) => (
               <article className={'track-card' + (activeTrack?.id === track.id ? ' is-current' : '')} key={track.id}>
-                <button className="cover-button" onClick={() => playTrack(track, visibleTracks)} aria-label={'Putar ' + track.title}>
+                <button className="cover-button" onClick={() => playTrack(track, visibleTracks)} aria-label={track.source === 'apple' ? 'Buka ' + track.title + ' di Apple Music' : 'Putar ' + track.title}>
                   {getArtwork(track) ? <img src={getArtwork(track)} alt="" loading="lazy" /> : <span className="cover-fallback">♫</span>}
-                  <span className="cover-overlay">{activeTrack?.id === track.id && playing ? 'Ⅱ' : '▶'}</span>
+                  <span className="cover-overlay">{track.source === 'apple' ? '↗' : activeTrack?.id === track.id && playing ? 'Ⅱ' : '▶'}</span>
                   <span className="track-index">{String(index + 1).padStart(2, '0')}</span>
                 </button>
                 <div className="track-meta">
                   <div className="track-name" title={track.title}>{track.title || 'Untitled track'}</div>
                   <div className="artist-name">{getArtist(track)}</div>
-                  <div className="track-stats">{formatDuration(track.duration)} <span>•</span> {Number(track.play_count || 0).toLocaleString('id-ID')} plays</div>
+                  <div className="track-stats">{track.source === 'apple' ? 'Katalog ' + (track.country || 'Global') : formatDuration(track.duration) + ' • ' + Number(track.play_count || 0).toLocaleString('id-ID') + ' plays'}</div>
+                  {track.source === 'apple' && <a className="store-link" href={track.trackViewUrl} target="_blank" rel="noreferrer">Apple Music ↗</a>}
+                  {track.source === 'audius' && <span className="source-link">Bisa diputar</span>}
                 </div>
                 <button className={'favorite-button' + (isFavorite(track) ? ' liked' : '')} onClick={() => toggleFavorite(track)} aria-label="Tambah ke favorit">{isFavorite(track) ? '♥' : '♡'}</button>
               </article>
@@ -265,7 +283,7 @@ function App() {
           </div>
         </section>
 
-        <footer className="footer-note">Music discovery powered by Audius Open Audio Protocol. Ketersediaan lagu mengikuti katalog dan ketentuan masing-masing kreator.</footer>
+        <footer className="footer-note">Yinn Lycs menggabungkan katalog terbuka Audius dan pencarian katalog Apple di beberapa storefront negara. Lagu dari Apple dibuka di layanan resminya; streaming langsung tersedia untuk track Audius yang dapat diputar.</footer>
       </main>
 
       <audio ref={audioRef} preload="none" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onTimeUpdate={event => setCurrentTime(event.currentTarget.currentTime)} onLoadedMetadata={event => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)} onEnded={playNext} onError={() => { setPlaying(false); setError('Stream lagu ini tidak tersedia. Coba lagu lain.') }} />
