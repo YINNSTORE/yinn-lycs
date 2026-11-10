@@ -1,21 +1,29 @@
 # Changelog
 
-## [1.1.0] — Global Search & AI Lyrics
+## [2.0.0] — Liquid Glass & Listening Experience
 
-### Added
-- AI-assisted song identification from short lyric fragments using Gemini 2.5 Flash and Google Search grounding.
-- Cross-store catalog search across Audius and Apple/iTunes storefronts in Indonesia, United States, United Kingdom, Japan, South Korea, Australia, India, and Brazil.
-- Apple/iTunes catalog result cards with official store links.
-- AI lyric search on/off control and candidate match explanations.
+### Visual redesign
+- Rebuilt the mobile interface around the supplied Liquid Glass player references.
+- Added translucent glass cards, lens blur where supported, and a lightweight fallback for older Android browsers.
+- Added a scroll-collapsing circular navigation control attached to the mini-player.
+- Added a full player screen with volume and seek sliders.
+- Added a unified glass capsule for lyrics, queue, share and sleep timer.
+- Added 16 font families including Rubik, font-weight controls, accent presets and night mode.
+- Refined icons, sliders, buttons, switches and responsive spacing.
 
-### Improved
-- More polished search experience with separate source labels for playable Audius tracks and Apple catalog entries.
-- Theme customization with Liquid Glass, Midnight, and Light modes.
-- Quick accent-color presets and a dedicated night-mode control.
-- Clearer playback and catalog availability messaging.
+### New features
+- Added an in-page Dynamic Island with capsule styles, position, size, glow and presets.
+- Added listening Recap for current year, last 30 days and all-time play events, including shareable posters.
+- Added playlist import from Spotify and Apple Music links (provider credentials and permissions required).
+- Added search discovery sections for recently played, most played, favorite artists and genres.
+- Added lyrics lookup and lyric poster creation with four backgrounds, Square/Story sizes, font, weight, alignment and text color.
+- Added free Google translation without an API key and optional Gemini/DeepL providers.
+- Added Ambient mode, Auralys Glass in-app widget card and optional animated artwork (off by default).
+- Added support link field for coffee contributions. All core app features remain free.
 
-### Playback and availability
-- Audius tracks that expose a stream remain playable in Yinn Lycs.
-- Apple/iTunes results are catalog discovery links and open in the official store; they are not streamed in-app.
-- AI lyric search requires the GEMINI_API_KEY environment variable in Vercel.
-- Favorites, listening history, and theme settings remain browser-local.
+### Playback and limitations
+- Search AI is disabled in v2.
+- Audius remains the in-app streaming source. Spotify and Apple Music imports provide metadata and official links only.
+- Dynamic Island is limited to the website; system-wide Android overlays and native home-screen widgets require a native app.
+- Offline downloads are not enabled.
+- Recap counts are local to the browser and begin recording v2 listening events after the update.
