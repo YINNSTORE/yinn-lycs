@@ -3,20 +3,9 @@ const AUDIO_HOSTS = [
   'https://discoveryprovider.audius.co/v1'
 ]
 
-const APPLE_STORES = ['ID', 'US', 'GB', 'JP', 'KR', 'AU', 'IN', 'BR']
-
 function audiusHeaders() {
   const token = process.env.AUDIUS_API_BEARER_TOKEN?.trim()
   return token ? { Authorization: 'Bearer ' + token, Accept: 'application/json' } : { Accept: 'application/json' }
-}
-
-function appleEmbedUrl(raw) {
-  try {
-    const url = new URL(raw)
-    if (!url.hostname.endsWith('apple.com')) return ''
-    url.hostname = 'embed.music.apple.com'
-    return url.toString()
-  } catch { return '' }
 }
 
 async function fetchJson(url, options = {}) {
@@ -39,7 +28,7 @@ async function searchAudius(query) {
         sort_method: 'relevant'
       })
       const payload = await fetchJson(host + '/tracks/search?' + params, { headers: audiusHeaders() })
-      const found = (payload.data || []).map(track => ({
+      const found = (payload.data || []).filter(track => track.is_streamable !== false && !track.is_stream_gated && track.is_available !== false).map(track => ({
         ...track,
         id: 'audius-' + track.id,
         source: 'audius',
@@ -54,50 +43,6 @@ async function searchAudius(query) {
   // One provider can return HTTP 200 with an empty or incomplete index.
   // Merge both discovery hosts before deciding that a track is unavailable.
   return uniqueTracks(collected).slice(0, 50)
-}
-
-async function searchApple(query) {
-  const stores = await Promise.allSettled(APPLE_STORES.map(async country => {
-    const params = new URLSearchParams({
-      term: query,
-      country,
-      media: 'music',
-      entity: 'song',
-      limit: '12'
-    })
-    const payload = await fetchJson('https://itunes.apple.com/search?' + params)
-    return (payload.results || [])
-      .filter(track => track.trackId && track.trackName && track.artistName && track.trackViewUrl)
-      .map(track => ({
-        id: 'apple-' + track.trackId,
-        title: track.trackName,
-        artist_name: track.artistName,
-        user: { name: track.artistName },
-        artwork: { '480x480': String(track.artworkUrl100 || '').replace('100x100bb', '600x600bb') },
-        duration: Math.round((track.trackTimeMillis || 0) / 1000),
-        play_count: 0,
-        album: track.collectionName || '',
-        genre: track.primaryGenreName || '',
-        country,
-        trackViewUrl: track.trackViewUrl,
-        embedUrl: appleEmbedUrl(track.trackViewUrl),
-        collectionViewUrl: track.collectionViewUrl || '',
-        source: 'apple',
-        sourceLabel: 'Apple Music',
-        playable: false
-      }))
-  }))
-  const seen = new Set()
-  const output = []
-  for (const result of stores) {
-    if (result.status !== 'fulfilled') continue
-    for (const track of result.value) {
-      if (seen.has(track.id)) continue
-      seen.add(track.id)
-      output.push(track)
-    }
-  }
-  return output
 }
 
 function uniqueTracks(items) {
@@ -118,14 +63,7 @@ function parsePlaylistUrl(raw) {
     if (!match) throw new Error('Link Spotify harus berupa link playlist.')
     return { provider: 'spotify', id: match[1] }
   }
-  if (host.endsWith('music.apple.com')) {
-    const match = url.pathname.match(/\/playlist\/[^/]+\/(pl\.[a-zA-Z0-9.-]+)/)
-      || url.pathname.match(/\/playlist\/(pl\.[a-zA-Z0-9.-]+)/)
-    if (!match) throw new Error('Link Apple Music harus berupa link playlist.')
-    const store = url.pathname.match(/^\/([a-z]{2})\//i)
-    return { provider: 'apple', id: match[1], storefront: store ? store[1].toLowerCase() : 'id' }
-  }
-  throw new Error('Gunakan link playlist Spotify atau Apple Music.')
+  throw new Error('Gunakan link playlist Spotify.')
 }
 
 async function spotifyPlaylist(playlistId) {
@@ -169,8 +107,6 @@ async function spotifyPlaylist(playlistId) {
     source: 'spotify',
     sourceLabel: 'Spotify',
     playable: false,
-    trackViewUrl: track.external_urls?.spotify || '',
-    embedUrl: 'https://open.spotify.com/embed/track/' + track.id
   }))
   return {
     name: details.name || 'Spotify Playlist',
@@ -178,45 +114,6 @@ async function spotifyPlaylist(playlistId) {
     source: 'spotify',
     sourceUrl: details.external_urls?.spotify || '',
     tracks: tracks.slice(0, 100)
-  }
-}
-
-async function applePlaylist(playlistId, storefront) {
-  const token = process.env.APPLE_MUSIC_DEVELOPER_TOKEN
-  if (!token) {
-    throw new Error('Impor Apple Music belum dikonfigurasi. Tambahkan APPLE_MUSIC_DEVELOPER_TOKEN di Vercel.')
-  }
-  const headers = { Authorization: 'Bearer ' + token }
-  const base = 'https://api.music.apple.com/v1/catalog/' + encodeURIComponent(storefront) + '/playlists/' + encodeURIComponent(playlistId)
-  const details = await fetchJson(base + '?include=tracks', { headers })
-  const playlist = details.data?.[0]
-  let items = playlist?.relationships?.tracks?.data || []
-  let next = playlist?.relationships?.tracks?.next || ''
-  while (next && items.length < 100) {
-    const page = await fetchJson(next.startsWith('http') ? next : 'https://api.music.apple.com' + next, { headers })
-    items.push(...(page.data || []))
-    next = page.next || ''
-  }
-  const tracks = items.slice(0, 100).map(track => ({
-    id: 'apple-' + track.id,
-    title: track.attributes?.name || 'Untitled',
-    artist_name: track.attributes?.artistName || 'Unknown artist',
-    user: { name: track.attributes?.artistName || 'Unknown artist' },
-    artwork: { '480x480': (track.attributes?.artwork?.url || '').replace('{w}', '600').replace('{h}', '600') },
-    duration: Math.round((track.attributes?.durationInMillis || 0) / 1000),
-    album: track.attributes?.albumName || '',
-    source: 'apple',
-    sourceLabel: 'Apple Music',
-    playable: false,
-    trackViewUrl: track.attributes?.url || '',
-    embedUrl: appleEmbedUrl(track.attributes?.url || '')
-  }))
-  return {
-    name: playlist?.attributes?.name || 'Apple Music Playlist',
-    image: playlist?.attributes?.artwork?.url?.replace('{w}', '600').replace('{h}', '600') || '',
-    source: 'apple',
-    sourceUrl: playlist?.attributes?.url || '',
-    tracks
   }
 }
 
@@ -299,10 +196,9 @@ export default async function handler(req, res) {
     if (action === 'search') {
       if (query.length < 2) return res.status(400).json({ error: 'Masukkan minimal 2 karakter.' })
       if (query.length > 160) return res.status(400).json({ error: 'Pencarian terlalu panjang.' })
-      const [audius, apple] = await Promise.all([searchAudius(query), searchApple(query)])
-      const data = uniqueTracks([...audius, ...apple]).slice(0, 100)
+      const audius = await searchAudius(query)
       res.setHeader('Cache-Control', 'public, s-maxage=45, stale-while-revalidate=180')
-      return res.status(200).json({ data, sources: { audius: audius.length, apple: apple.length, stores: APPLE_STORES } })
+      return res.status(200).json({ data: audius, sources: { audius: audius.length } })
     }
 
     if (action === 'import') {
@@ -310,9 +206,7 @@ export default async function handler(req, res) {
       const url = String(req.body?.url || '').trim()
       if (url.length > 600) return res.status(400).json({ error: 'Link terlalu panjang.' })
       const parsed = parsePlaylistUrl(url)
-      const result = parsed.provider === 'spotify'
-        ? await spotifyPlaylist(parsed.id)
-        : await applePlaylist(parsed.id, parsed.storefront)
+      const result = await spotifyPlaylist(parsed.id)
       return res.status(200).json(result)
     }
 
@@ -340,6 +234,7 @@ export default async function handler(req, res) {
 
     if (action === 'stream') {
       if (!/^[a-zA-Z0-9_-]+$/.test(id)) return res.status(400).json({ error: 'Track ID tidak valid.' })
+      if (!/^audius-[a-zA-Z0-9_-]+$/.test(id) && !/^[0-9]+$/.test(id)) return res.status(400).json({ error: 'Track ID bukan ID Audius.' })
       const audiusId = id.replace(/^audius-/, '')
       const preferred = Number(req.query.provider) === 1 ? 1 : 0
       const hosts = [AUDIO_HOSTS[preferred], AUDIO_HOSTS[1 - preferred]]
@@ -348,7 +243,7 @@ export default async function handler(req, res) {
       for (const host of hosts) {
         try {
           const upstream = await fetch(host + '/tracks/' + encodeURIComponent(audiusId) + '/stream?' + params, {
-            headers: audiusHeaders(),
+            headers: { ...audiusHeaders(), Accept: 'audio/mpeg, audio/*;q=0.9, */*;q=0.8', ...(req.headers.range ? { Range: req.headers.range } : {}) },
             redirect: 'manual',
             signal: AbortSignal.timeout(15000)
           })
@@ -361,8 +256,13 @@ export default async function handler(req, res) {
           if (upstream.ok) {
             res.setHeader('Content-Type', upstream.headers.get('content-type') || 'audio/mpeg')
             res.setHeader('Cache-Control', 'no-store')
+            res.setHeader('Accept-Ranges', upstream.headers.get('accept-ranges') || 'bytes')
+            const contentRange = upstream.headers.get('content-range')
+            const contentLength = upstream.headers.get('content-length')
+            if (contentRange) res.setHeader('Content-Range', contentRange)
+            if (contentLength) res.setHeader('Content-Length', contentLength)
             const audio = Buffer.from(await upstream.arrayBuffer())
-            return res.status(200).send(audio)
+            return res.status(upstream.status === 206 ? 206 : 200).send(audio)
           }
           console.error('Audius stream provider failed:', upstream.status, host)
         } catch (error) {
@@ -387,7 +287,7 @@ export default async function handler(req, res) {
     for (const host of AUDIO_HOSTS) {
       try {
         const payload = await fetchJson(host + endpoint + '?' + params, { headers: audiusHeaders() })
-        const data = (payload.data || []).map(track => ({
+        const data = (payload.data || []).filter(track => track.is_streamable !== false && !track.is_stream_gated && track.is_available !== false).map(track => ({
           ...track,
           id: 'audius-' + track.id,
           source: 'audius',
