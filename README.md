@@ -21,13 +21,13 @@ Add secrets in Vercel → Project → Settings → Environment Variables. Never 
 
 | Variable | Purpose | Required |
 | --- | --- | --- |
-| SPOTIFY_CLIENT_ID | Read public Spotify playlist metadata | For Spotify import |
+| AUDIUS_API_BEARER_TOKEN | Private Audius Bearer token used server-side for catalog and stream requests | Recommended |\n| SPOTIFY_CLIENT_ID | Read public Spotify playlist metadata | For Spotify import |
 | SPOTIFY_CLIENT_SECRET | Server-side Spotify client credentials | For Spotify import |
 | APPLE_MUSIC_DEVELOPER_TOKEN | Apple Music catalog playlist metadata | For Apple Music import |
 | GEMINI_API_KEY | Optional Gemini lyrics translation | Optional |
 | DEEPL_API_KEY | Optional DeepL translation | Optional |
 
-After adding or changing variables, redeploy the Vercel project.
+After adding or changing variables, redeploy the Vercel project. For Audius, create the variable name exactly as `AUDIUS_API_BEARER_TOKEN` and paste only the token value (without the `Bearer ` prefix). The token is read only by the Vercel serverless API and is never sent to the browser.
 
 Spotify playlist access is subject to Spotify authorization and playlist access restrictions. The app imports metadata only; Spotify audio is never downloaded or streamed by Yinn Lycs. Apple Music catalog and imported tracks open in the official Apple Music embedded player inside Yinn Lycs. Apple Music subscribers can play full tracks in the embed; listeners without an active subscription hear a 30-second preview.
 
