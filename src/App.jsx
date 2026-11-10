@@ -17,6 +17,7 @@ function App() {
   const searchTimer = useRef(null)
   const [tab, setTab] = useState('Home')
   const [mode, setMode] = useState('trending')
+  const [reloadKey, setReloadKey] = useState(0)
   const [query, setQuery] = useState('')
   const [tracks, setTracks] = useState([])
   const [searchResults, setSearchResults] = useState([])
@@ -44,7 +45,7 @@ function App() {
       .catch(err => { if (alive) setError(err.message || 'Gagal memuat katalog musik.') })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [mode])
+  }, [mode, reloadKey])
 
   useEffect(() => {
     if (tab !== 'Search') return
@@ -241,7 +242,7 @@ function App() {
 
           {loading && tab === 'Home' && <div className="status-message"><span className="spinner" /> Memuat katalog musik...</div>}
           {searchLoading && <div className="status-message"><span className="spinner" /> Mencari lagu online...</div>}
-          {error && <div className="error-message">{error}<button onClick={() => tab === 'Search' ? setQuery(value => value + ' ') : setMode(value => value)}>Coba lagi</button></div>}
+          {error && <div className="error-message">{error}<button onClick={() => tab === 'Search' ? setQuery(value => value + ' ') : setReloadKey(value => value + 1)}>Coba lagi</button></div>}
           {tab === 'Search' && query.trim().length < 2 && <div className="empty-state">Ketik nama lagu atau artis di kolom pencarian.</div>}
           {!loading && !searchLoading && !error && visibleTracks.length === 0 && (tab !== 'Search' || query.trim().length >= 2) && <div className="empty-state">{tab === 'Library' ? 'Belum ada lagu favorit. Tekan ikon hati pada lagu.' : tab === 'History' ? 'Lagu yang kamu putar akan muncul di sini.' : 'Belum ada hasil. Coba kata kunci lain.'}</div>}
 
