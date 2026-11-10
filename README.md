@@ -2,46 +2,55 @@
 
 Personal music discovery and streaming web app built with React, Vite, and Vercel Functions.
 
-## v1.1.0
+## v2.0.0
 
-- Search across Audius and Apple/iTunes music catalogs in 8 storefronts (Indonesia, United States, United Kingdom, Japan, South Korea, Australia, India, and Brazil).
-- Optional AI lyric-fragment identification using Gemini with Google Search grounding.
-- Real streaming playback for playable Audius tracks.
-- Apple catalog results open their official Apple/iTunes destination; they are not streamed inside Yinn Lycs.
-- Theme presets: Liquid Glass, Midnight, and Light, plus custom accent color.
-- Favorites and listening history are stored in the current browser.
+- Redesigned mobile-first Liquid Glass interface inspired by the supplied player screenshots.
+- Collapsible bottom navigation and attached mini-player while scrolling.
+- Full player with seek and volume controls; lyrics, queue, share and sleep timer shortcuts.
+- 16 font choices, font-weight control, theme presets, custom accent colors and night mode.
+- In-app Dynamic Island, Ambient mode, optional animated artwork and Auralys Glass widget card.
+- Listening Recap for this year, last 30 days and all time, with shareable poster.
+- Search page sections for recent plays, most-played tracks, favorite artists and genres.
+- Playlist import UI for Spotify and Apple Music links (provider credentials required).
+- Lyrics lookup through LRCLIB and Google Translate without a key; optional Gemini and DeepL translation.
+- Search AI is disabled in v2.
 
-## AI lyric search setup
+## Provider configuration
 
-AI lyric identification requires a Gemini API key.
+Add secrets in Vercel → Project → Settings → Environment Variables. Never commit keys to GitHub.
 
-1. Create a key in [Google AI Studio](https://aistudio.google.com/app/apikey).
-2. Open the Yinn Lycs project in Vercel.
-3. Go to **Settings → Environment Variables**.
-4. Add **GEMINI_API_KEY** with your key as the value.
-5. Enable it for **Production** (and Preview if desired), then save.
-6. Redeploy the project so the new environment variable is available to the function.
+| Variable | Purpose | Required |
+| --- | --- | --- |
+| SPOTIFY_CLIENT_ID | Read public Spotify playlist metadata | For Spotify import |
+| SPOTIFY_CLIENT_SECRET | Server-side Spotify client credentials | For Spotify import |
+| APPLE_MUSIC_DEVELOPER_TOKEN | Apple Music catalog playlist metadata | For Apple Music import |
+| GEMINI_API_KEY | Optional Gemini lyrics translation | Optional |
+| DEEPL_API_KEY | Optional DeepL translation | Optional |
 
-Never put the Gemini key in frontend code or commit it to GitHub. The key is read only by the serverless function.
+After adding or changing variables, redeploy the Vercel project.
 
-The AI feature uses Gemini 2.5 Flash and Google Search grounding to identify a likely song from a short lyric fragment. Results are suggestions and may not always be correct. Google Search grounding may incur API usage charges; check Google's current pricing and limits.
+Spotify playlist access is subject to Spotify authorization and playlist access restrictions. The app imports metadata only; Spotify audio is never downloaded or streamed by Yinn Lycs. Apple Music import also reads metadata only; playback opens the provider's official page.
 
-## Music catalog and playback notes
+## Lyrics and translation
 
-Yinn Lycs combines:
-- **Audius** for open-catalog music discovery and direct playback when the track is streamable.
-- **Apple/iTunes Search API** for broader international catalog metadata and official store links.
+LRCLIB provides lyrics when a matching record is available. Google translation is offered without an API key through its public web translation endpoint; availability and rate limits are controlled by that service. Gemini and DeepL require the environment variables above.
 
-No single free API guarantees every song worldwide. Apple catalog entries are linked to their official destination and are not played as audio inside this app. Availability depends on each storefront and rights holder.
+## Important platform limits
+
+- Dynamic Island is an in-page web UI, not an Android system-wide floating overlay. Browser Media Session controls may appear on supported Android lock screens.
+- The Auralys Glass widget is an in-app widget card. A real Android home-screen widget requires a native Android application.
+- Full Liquid Glass blur is enabled when browser support and Android version detection indicate compatibility; older Android browsers use a lighter glass fallback.
+- Recap statistics are stored locally in this browser and start counting v2 play events after the update. They do not sync across devices.
+- Offline downloads are not enabled. The library shows offline/cache placeholders rather than downloading copyrighted audio.
+- Audius tracks can play in-app when their stream is available. Spotify and Apple Music imported tracks are metadata and official provider links, not in-app audio.
 
 ## Development
 
-- Install dependencies with **npm install**.
-- Start Vite with **npm run dev**.
-- Build with **npm run build**.
-
-Vercel serves the /api directory as serverless functions. For local API testing, use the Vercel CLI (vercel dev) after linking the project.
+- `npm install`
+- `npm run dev` for the Vite frontend
+- `npm run build` to create the production bundle
+- Use `vercel dev` to test `/api` serverless functions locally after linking the project.
 
 ## Privacy
 
-Favorites, recent listening history, theme choice, and accent color are stored locally in the browser. They are not synced between devices.
+Favorites, listening history, play events, imported playlist metadata, theme, font, and settings are stored in local browser storage. They are not synced between devices.
