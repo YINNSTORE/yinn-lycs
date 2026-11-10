@@ -129,7 +129,7 @@ function App() {
   const [showRecapPoster, setShowRecapPoster] = useState(false)
   const [supportUrl, setSupportUrl] = useState(() => readStorage('yinn-v2-support', ''))
   const [fontGlass, setFontGlass] = useState(() => {
-    const android = navigator.userAgent.match(/Android\\s([0-9]+)/i)
+    const android = navigator.userAgent.match(/Android\s([0-9]+)/i)
     const androidVersion = android ? Number(android[1]) : 99
     const supportsBlur = CSS.supports?.('backdrop-filter', 'blur(20px)') || CSS.supports?.('-webkit-backdrop-filter', 'blur(20px)')
     return Boolean(supportsBlur && androidVersion >= 13)
