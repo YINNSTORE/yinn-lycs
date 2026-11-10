@@ -27,3 +27,12 @@
 - Dynamic Island is limited to the website; system-wide Android overlays and native home-screen widgets require a native app.
 - Offline downloads are not enabled.
 - Recap counts are local to the browser and begin recording v2 listening events after the update.
+
+## [2.0.1] — Playback fix
+
+- Removed the lyrics/queue/share/sleep-timer capsule from the mini-player on the main page; these controls remain available in the full player.
+- Apple Music tracks now open in the official embedded player inside Yinn Lycs instead of redirecting away from the site.
+- Apple catalog tracks first attempt an exact-title match in Audius for direct in-app streaming.
+- Added a fallback to the alternate Audius discovery host when a stream fails.
+- Spotify imported tracks now use the official embedded track player.
+- Full Apple Music tracks require an active Apple Music subscription; listeners without one can play Apple's 30-second preview.
