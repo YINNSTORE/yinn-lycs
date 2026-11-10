@@ -5,6 +5,11 @@ const AUDIO_HOSTS = [
 
 const APPLE_STORES = ['ID', 'US', 'GB', 'JP', 'KR', 'AU', 'IN', 'BR']
 
+function audiusHeaders() {
+  const token = process.env.AUDIUS_API_BEARER_TOKEN?.trim()
+  return token ? { Authorization: 'Bearer ' + token, Accept: 'application/json' } : { Accept: 'application/json' }
+}
+
 function appleEmbedUrl(raw) {
   try {
     const url = new URL(raw)
@@ -32,7 +37,7 @@ async function searchAudius(query) {
         limit: '20',
         sort_method: 'relevant'
       })
-      const payload = await fetchJson(host + '/tracks/search?' + params)
+      const payload = await fetchJson(host + '/tracks/search?' + params, { headers: audiusHeaders() })
       return (payload.data || []).map(track => ({
         ...track,
         id: 'audius-' + track.id,
@@ -332,12 +337,35 @@ export default async function handler(req, res) {
     if (action === 'stream') {
       if (!/^[a-zA-Z0-9_-]+$/.test(id)) return res.status(400).json({ error: 'Track ID tidak valid.' })
       const audiusId = id.replace(/^audius-/, '')
-      const providerIndex = Number(req.query.provider) === 1 ? 1 : 0
-      const host = AUDIO_HOSTS[providerIndex]
-      res.setHeader('Cache-Control', 'no-store')
-      res.statusCode = 302
-      res.setHeader('Location', host + '/tracks/' + encodeURIComponent(audiusId) + '/stream?app_name=YinnLycs')
-      return res.end()
+      const preferred = Number(req.query.provider) === 1 ? 1 : 0
+      const hosts = [AUDIO_HOSTS[preferred], AUDIO_HOSTS[1 - preferred]]
+      const params = new URLSearchParams({ app_name: 'YinnLycs' })
+
+      for (const host of hosts) {
+        try {
+          const upstream = await fetch(host + '/tracks/' + encodeURIComponent(audiusId) + '/stream?' + params, {
+            headers: audiusHeaders(),
+            redirect: 'manual',
+            signal: AbortSignal.timeout(15000)
+          })
+          const location = upstream.headers.get('location')
+          if (upstream.status >= 300 && upstream.status < 400 && location) {
+            res.setHeader('Cache-Control', 'no-store')
+            res.setHeader('Location', location)
+            return res.status(upstream.status).end()
+          }
+          if (upstream.ok) {
+            res.setHeader('Content-Type', upstream.headers.get('content-type') || 'audio/mpeg')
+            res.setHeader('Cache-Control', 'no-store')
+            const audio = Buffer.from(await upstream.arrayBuffer())
+            return res.status(200).send(audio)
+          }
+          console.error('Audius stream provider failed:', upstream.status, host)
+        } catch (error) {
+          console.error('Audius stream request failed:', error)
+        }
+      }
+      return res.status(502).json({ error: 'Stream Audius tidak tersedia. Coba lagu lain.' })
     }
 
     const params = new URLSearchParams({ app_name: 'YinnLycs', limit: String(limit), offset: String(offset) })
@@ -354,7 +382,7 @@ export default async function handler(req, res) {
     res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=120')
     for (const host of AUDIO_HOSTS) {
       try {
-        const payload = await fetchJson(host + endpoint + '?' + params, { headers: { Accept: 'application/json' } })
+        const payload = await fetchJson(host + endpoint + '?' + params, { headers: audiusHeaders() })
         const data = (payload.data || []).map(track => ({
           ...track,
           id: 'audius-' + track.id,
