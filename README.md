@@ -29,7 +29,7 @@ Add secrets in Vercel → Project → Settings → Environment Variables. Never 
 
 After adding or changing variables, redeploy the Vercel project.
 
-Spotify playlist access is subject to Spotify authorization and playlist access restrictions. The app imports metadata only; Spotify audio is never downloaded or streamed by Yinn Lycs. Apple Music import also reads metadata only; playback opens the provider's official page.
+Spotify playlist access is subject to Spotify authorization and playlist access restrictions. The app imports metadata only; Spotify audio is never downloaded or streamed by Yinn Lycs. Apple Music catalog and imported tracks open in the official Apple Music embedded player inside Yinn Lycs. Apple Music subscribers can play full tracks in the embed; listeners without an active subscription hear a 30-second preview.
 
 ## Lyrics and translation
 
@@ -42,7 +42,7 @@ LRCLIB provides lyrics when a matching record is available. Google translation i
 - Full Liquid Glass blur is enabled when browser support and Android version detection indicate compatibility; older Android browsers use a lighter glass fallback.
 - Recap statistics are stored locally in this browser and start counting v2 play events after the update. They do not sync across devices.
 - Offline downloads are not enabled. The library shows offline/cache placeholders rather than downloading copyrighted audio.
-- Audius tracks can play in-app when their stream is available. Spotify and Apple Music imported tracks are metadata and official provider links, not in-app audio.
+- Audius tracks play in-app when their stream is available; Yinn Lycs now retries the alternate Audius discovery host if the primary stream fails. Apple Music and Spotify tracks use their official embedded players. Apple Music full-track playback requires an active Apple Music subscription; otherwise Apple provides a 30-second preview.
 
 ## Development
 
