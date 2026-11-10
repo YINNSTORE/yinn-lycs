@@ -289,29 +289,69 @@ function App() {
       return
     }
 
-    // For Apple catalog results, first look for the same recording in Audius.
+    // Apple is used as a metadata catalogue only. Always resolve its tracks
+    // to a playable Audius upload first; never silently open Apple Music.
     if (track.source === 'apple' && allowAudiusMatch) {
-      try {
-        const search = await searchTracks(track.title + ' ' + getArtist(track))
-        const normalize = value => String(value || '').toLowerCase()
-          .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-          .replace(/[^a-z0-9]+/g, ' ').trim()
-        const wantedTitle = normalize(track.title)
-        const wantedArtist = normalize(getArtist(track))
-        const match = (search.data || []).find(candidate =>
-          candidate.source === 'audius' &&
-          normalize(candidate.title) === wantedTitle &&
-          normalize(getArtist(candidate)).includes(wantedArtist)
-        ) || (search.data || []).find(candidate =>
-          candidate.source === 'audius' && normalize(candidate.title) === wantedTitle
-        )
-        if (match) {
-          await playTrack(match, sourceList, false)
-          return
+      const normalize = value => String(value || '').toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/\b(feat(?:uring)?|ft)\b.*$/g, '')
+        .replace(/[^a-z0-9]+/g, ' ').trim()
+      const title = normalize(track.title)
+      const artist = normalize(getArtist(track))
+      const titleTokens = title.split(' ').filter(token => token.length > 1)
+      const artistTokens = artist.split(' ').filter(token => token.length > 1)
+      const baseTitle = String(track.title || '').replace(/\s*[([{]?\s*(?:feat(?:uring)?|ft)\b.*$/i, '').trim()
+      const queries = [...new Set([baseTitle, track.title, baseTitle + ' ' + getArtist(track)].filter(Boolean))]
+      const candidates = new Map()
+
+      for (const query of queries) {
+        try {
+          const result = await searchTracks(query)
+          for (const candidate of result.data || []) {
+            if (candidate.source === 'audius' && candidate.playable !== false) candidates.set(candidate.id, candidate)
+          }
+          const exact = [...candidates.values()].find(candidate =>
+            normalize(candidate.title) === title &&
+            (!artistTokens.length || artistTokens.some(token => normalize(getArtist(candidate)).includes(token)))
+          )
+          if (exact) break
+        } catch (error) {
+          console.warn('Audius catalogue lookup failed:', error)
         }
-      } catch (error) {
-        console.warn('Audius exact-track fallback unavailable:', error)
       }
+
+      const scored = [...candidates.values()].map(candidate => {
+        const candidateTitle = normalize(candidate.title)
+        const candidateArtist = normalize(getArtist(candidate))
+        const candidateTokens = candidateTitle.split(' ').filter(token => token.length > 1)
+        const overlap = titleTokens.filter(token => candidateTokens.includes(token)).length
+        const titleScore = titleTokens.length ? overlap / titleTokens.length : 0
+        const artistScore = artistTokens.length
+          ? artistTokens.filter(token => candidateArtist.includes(token)).length / artistTokens.length
+          : 0
+        const exactTitle = candidateTitle === title
+        const score = exactTitle ? 0.88 + artistScore * 0.12 : titleScore * 0.78 + artistScore * 0.22
+        return { candidate, score, exactTitle, artistScore }
+      }).sort((a, b) => b.score - a.score)
+
+      const best = scored[0]
+      const match = best && (
+        (best.exactTitle && (best.artistScore >= 0.25 || !artistTokens.length)) ||
+        (!best.exactTitle && best.score >= 0.82 && best.artistScore >= 0.35)
+      ) ? best.candidate : null
+
+      if (match) {
+        await playTrack(match, sourceList, false)
+        return
+      }
+
+      audioRef.current?.pause()
+      setPlaying(false)
+      setProviderEmbedType('')
+      setProviderEmbedUrl('')
+      setShowPlayer(false)
+      setError('Lagu ini ditemukan di katalog Apple, tetapi versi streaming-nya tidak ditemukan di Audius. Yinn Lycs tidak akan mengalihkan pemutaran ke Apple Music.')
+      return
     }
 
     const nextQueue = Array.isArray(sourceList) && sourceList.length ? sourceList : tracks
@@ -323,7 +363,7 @@ function App() {
     setHistory(previous => [track, ...previous.filter(item => item.id !== track.id)].slice(0, 100))
     setPlays(previous => [...previous, { track, at: Date.now() }].slice(-2000))
 
-    if (track.source === 'apple' || track.source === 'spotify') {
+    if (track.source === 'spotify') {
       audioRef.current?.pause()
       setPlaying(false)
       setProviderEmbedType(track.source)
