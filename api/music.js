@@ -8,7 +8,7 @@ async function searchAudius(query) {
   for (const host of AUDIO_HOSTS) {
     try {
       const params = new URLSearchParams({ app_name: 'YinnLycs', query, limit: '18', sort_method: 'relevant' })
-      const response = await fetch(host + '/tracks/search?' + params.toString())
+      const response = await fetch(host + '/tracks/search?' + params.toString(), { signal: AbortSignal.timeout(7000) })
       if (!response.ok) continue
       const payload = await response.json()
       return (payload.data || []).map(track => ({
@@ -28,7 +28,7 @@ async function searchAudius(query) {
 async function searchApple(query) {
   const results = await Promise.allSettled(APPLE_STORES.map(async country => {
     const params = new URLSearchParams({ term: query, country, media: 'music', entity: 'song', limit: '12' })
-    const response = await fetch('https://itunes.apple.com/search?' + params.toString())
+    const response = await fetch('https://itunes.apple.com/search?' + params.toString(), { signal: AbortSignal.timeout(7000) })
     if (!response.ok) return []
     const payload = await response.json()
     return (payload.results || [])
@@ -81,15 +81,22 @@ async function identifySongFromLyrics(query) {
     'User query: ' + JSON.stringify(query)
   ].join('\n')
 
-  const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      tools: [{ google_search: {} }],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 700 }
+  let response
+  try {
+    response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        tools: [{ google_search: {} }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 700 }
+      }),
+      signal: AbortSignal.timeout(18000)
     })
-  })
+  } catch (error) {
+    console.error('Gemini request failed:', error)
+    return { configured: true, used: false, matches: [], error: 'AI tidak merespons. Pencarian katalog biasa tetap berjalan.' }
+  }
 
   if (!response.ok) {
     const errorText = await response.text()
