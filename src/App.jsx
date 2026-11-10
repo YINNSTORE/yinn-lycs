@@ -87,8 +87,6 @@ function App() {
   const [playlists, setPlaylists] = useState(() => readStorage('yinn-v2-playlists', []))
   const [queue, setQueue] = useState([])
   const [activeTrack, setActiveTrack] = useState(null)
-  const [providerEmbedUrl, setProviderEmbedUrl] = useState('')
-  const [providerEmbedType, setProviderEmbedType] = useState('')
   const [playing, setPlaying] = useState(false)
   const [loading, setLoading] = useState(true)
   const [searchLoading, setSearchLoading] = useState(false)
@@ -281,17 +279,13 @@ function App() {
     : tab === 'Library' ? (libraryFilter === 'Disukai' ? favorites : libraryFilter === 'Top 50' ? topPlayed.map(item => item.track) : libraryFilter === 'Playlist' ? playlists.flatMap(item => item.tracks || []) : favorites)
     : tab === 'History' ? history : tracks
 
-  const playTrack = useCallback(async (track, sourceList = tracks, allowAudiusMatch = true) => {
+  const playTrack = useCallback(async (track, sourceList = tracks) => {
     if (!track) return
-    if (activeTrack?.id === track.id && track.source === 'audius') {
-      if (audioRef.current?.paused) audioRef.current.play().catch(() => setError('Gagal melanjutkan audio.'))
-      else audioRef.current?.pause()
-      return
-    }
+    const isAudiusTrack = track.source === 'audius' || String(track.id || '').startsWith('audius-')
 
-    // Apple is used as a metadata catalogue only. Always resolve its tracks
-    // to a playable Audius upload first; never silently open Apple Music.
-    if (track.source === 'apple' && allowAudiusMatch) {
+    // Spotify playlist imports are metadata only. Resolve their titles to a
+    // streamable Audius upload; Yinn Lycs never embeds an external player.
+    if (!isAudiusTrack) {
       const normalize = value => String(value || '').toLowerCase()
         .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
         .replace(/\b(feat(?:uring)?|ft)\b.*$/g, '')
@@ -304,19 +298,19 @@ function App() {
       const queries = [...new Set([baseTitle, track.title, baseTitle + ' ' + getArtist(track)].filter(Boolean))]
       const candidates = new Map()
 
-      for (const query of queries) {
+      audioRef.current?.pause()
+      setPlaying(false)
+      setError('Mencari versi audio di katalog Yinn Lycs...')
+
+      for (const term of queries) {
         try {
-          const result = await searchTracks(query)
+          const result = await searchTracks(term)
           for (const candidate of result.data || []) {
             if (candidate.source === 'audius' && candidate.playable !== false) candidates.set(candidate.id, candidate)
           }
-          const exact = [...candidates.values()].find(candidate =>
-            normalize(candidate.title) === title &&
-            (!artistTokens.length || artistTokens.some(token => normalize(getArtist(candidate)).includes(token)))
-          )
-          if (exact) break
-        } catch (error) {
-          console.warn('Audius catalogue lookup failed:', error)
+          if ([...candidates.values()].some(candidate => normalize(candidate.title) === title)) break
+        } catch (lookupError) {
+          console.warn('Audius lookup failed:', lookupError)
         }
       }
 
@@ -330,8 +324,7 @@ function App() {
           ? artistTokens.filter(token => candidateArtist.includes(token)).length / artistTokens.length
           : 0
         const exactTitle = candidateTitle === title
-        const score = exactTitle ? 0.88 + artistScore * 0.12 : titleScore * 0.78 + artistScore * 0.22
-        return { candidate, score, exactTitle, artistScore }
+        return { candidate, exactTitle, artistScore, score: exactTitle ? 0.88 + artistScore * 0.12 : titleScore * 0.78 + artistScore * 0.22 }
       }).sort((a, b) => b.score - a.score)
 
       const best = scored[0]
@@ -340,15 +333,22 @@ function App() {
         (!best.exactTitle && best.score >= 0.82 && best.artistScore >= 0.35)
       ) ? best.candidate : null
 
-      if (match) {
-        await playTrack(match, sourceList, false)
+      if (!match) {
+        audioRef.current?.pause()
+        if (audioRef.current) { audioRef.current.removeAttribute('src'); audioRef.current.load() }
+        setQueue(Array.isArray(sourceList) ? sourceList : [])
+        setActiveTrack(track)
+        setError('Versi streaming lagu ini belum tersedia di katalog Audius. Yinn Lycs hanya memutar audio yang tersedia langsung di katalog kami.')
         return
       }
+      await playTrack(match, sourceList)
+      return
+    }
 
-      // No Audius copy found: fall through to the official Apple Music web
-      // embed below. This stays inside Yinn Lycs instead of opening the Apple app.
-      audioRef.current?.pause()
-      setPlaying(false)
+    if (activeTrack?.id === track.id && audioRef.current) {
+      if (audioRef.current.paused) audioRef.current.play().catch(() => setError('Gagal melanjutkan audio.'))
+      else audioRef.current.pause()
+      return
     }
 
     const nextQueue = Array.isArray(sourceList) && sourceList.length ? sourceList : tracks
@@ -359,31 +359,19 @@ function App() {
     setError('')
     setHistory(previous => [track, ...previous.filter(item => item.id !== track.id)].slice(0, 100))
     setPlays(previous => [...previous, { track, at: Date.now() }].slice(-2000))
-
-    if (track.source === 'apple' || track.source === 'spotify') {
-      audioRef.current?.pause()
-      setPlaying(false)
-      setProviderEmbedType(track.source)
-      setProviderEmbedUrl(track.embedUrl || (
-        track.source === 'apple'
-          ? String(track.trackViewUrl || '').replace('https://music.apple.com/', 'https://embed.music.apple.com/').replace('https://itunes.apple.com/', 'https://embed.music.apple.com/')
-          : 'https://open.spotify.com/embed/track/' + String(track.id).replace(/^spotify-/, '')
-      ))
-      setShowPlayer(true)
+    if (!audioRef.current) {
+      setError('Pemutar audio belum siap. Muat ulang halaman lalu coba lagi.')
       return
     }
-
-    if (!audioRef.current) return
-    setProviderEmbedType('')
-    setProviderEmbedUrl('')
-    streamAttemptRef.current = 0
     const audio = audioRef.current
+    audio.pause()
+    streamAttemptRef.current = 0
     audio.src = getStreamUrl(track.id, 0)
     audio.volume = volume
     audio.load()
     audio.play().catch(() => {
       setPlaying(false)
-      setError('Pemutaran gagal. Mencoba server streaming cadangan...')
+      setError('Gagal memulai stream Audius. Mencoba server cadangan...')
     })
   }, [activeTrack, tracks, volume])
 
@@ -411,7 +399,6 @@ function App() {
   const isFavorite = track => favorites.some(item => item.id === track?.id)
   const togglePlayback = () => {
     if (!activeTrack) { if (tracks[0]) playTrack(tracks[0], tracks); return }
-    if (providerEmbedUrl) { setShowPlayer(true); return }
     if (audioRef.current?.paused) audioRef.current.play().catch(() => setError('Gagal memutar lagu.'))
     else audioRef.current?.pause()
   }
@@ -722,7 +709,7 @@ function App() {
         {settingsTab === 'Tentang' && <div className="settings-content"><p>Yinn Lycs v2.0.0</p><p>Semua fitur inti gratis. Streaming, katalog, dan lirik bergantung pada ketersediaan layanan sumber.</p><button className="primary-action" onClick={() => { setSettingsOpen(false); setTab('About') }}>Tentang Yinn Lycs</button></div>}
       </section></div>}
 
-      {showPlayer && <div className="modal-backdrop" onClick={() => setShowPlayer(false)}><section className="full-player glass" onClick={event => event.stopPropagation()}><div className="modal-head"><div><small>NOW PLAYING</small><h2>Music player</h2></div><button onClick={() => setShowPlayer(false)}><Icon name="close"/></button></div><div className="full-art">{activeTrack && getArtwork(activeTrack) ? <img src={getArtwork(activeTrack)} alt=""/> : <Icon name="library" size={64}/>}</div><div className="full-track-meta"><b>{activeTrack?.title || 'Pilih lagu'}</b><span>{activeTrack ? getArtist(activeTrack) : 'Yinn Lycs'}</span></div>{providerEmbedUrl ? <div className="provider-embed-wrap"><div className="provider-embed-label">{providerEmbedType === 'apple' ? 'APPLE MUSIC PLAYER' : 'SPOTIFY PLAYER'}</div><iframe className="provider-embed" src={providerEmbedUrl} title={(activeTrack?.title || 'Music') + ' official music player'} allow="autoplay *; encrypted-media *; fullscreen *; clipboard-write" loading="lazy"/><p className="provider-embed-note">{providerEmbedType === 'apple' ? 'Apple Music: pemilik akun yang sudah berlangganan dapat memutar lagu penuh di sini. Tanpa login, Apple hanya menyediakan cuplikan 30 detik.' : 'Spotify: pemutaran mengikuti login dan ketentuan akun Spotify.'}</p></div> : <><div className="full-timeline"><span>{formatDuration(currentTime)}</span><input type="range" min="0" max={duration || 0} step="0.1" value={Math.min(currentTime,duration || 0)} onChange={event => { if(audioRef.current) audioRef.current.currentTime=Number(event.target.value) }}/><span>{formatDuration(duration)}</span></div><div className="full-controls"><button onClick={playPrevious}><Icon name="prev" size={28}/></button><button className="full-play" onClick={togglePlayback}><Icon name={playing ? 'pause' : 'play'} size={27}/></button><button onClick={playNext}><Icon name="next" size={28}/></button></div><label className="full-volume"><Icon name="volume"/><input type="range" min="0" max="1" step=".01" value={volume} onChange={event => setVolume(Number(event.target.value))}/></label></>}<div className="full-shortcuts"><button onClick={() => {setShowPlayer(false);openLyrics()}}><Icon name="lyrics"/>Lirik</button><button onClick={() => {setShowPlayer(false);setShowQueue(true)}}><Icon name="queue"/>Antrean</button><button onClick={shareTrack}><Icon name="share"/>Bagikan</button><button onClick={() => {setShowPlayer(false);setShowSleep(true)}}><Icon name="timer"/>Timer</button></div></section></div>}
+      {showPlayer && <div className="modal-backdrop" onClick={() => setShowPlayer(false)}><section className="full-player glass" onClick={event => event.stopPropagation()}><div className="modal-head"><div><small>NOW PLAYING</small><h2>Music player</h2></div><button onClick={() => setShowPlayer(false)}><Icon name="close"/></button></div><div className="full-art">{activeTrack && getArtwork(activeTrack) ? <img src={getArtwork(activeTrack)} alt=""/> : <Icon name="library" size={64}/>}</div><div className="full-track-meta"><b>{activeTrack?.title || 'Pilih lagu'}</b><span>{activeTrack ? getArtist(activeTrack) : 'Yinn Lycs'}</span></div><div className="full-timeline"><span>{formatDuration(currentTime)}</span><input type="range" min="0" max={duration || 0} step="0.1" value={Math.min(currentTime,duration || 0)} onChange={event => { if(audioRef.current) audioRef.current.currentTime=Number(event.target.value) }}/><span>{formatDuration(duration)}</span></div><div className="full-controls"><button onClick={playPrevious}><Icon name="prev" size={28}/></button><button className="full-play" onClick={togglePlayback}><Icon name={playing ? 'pause' : 'play'} size={27}/></button><button onClick={playNext}><Icon name="next" size={28}/></button></div><label className="full-volume"><Icon name="volume"/><input type="range" min="0" max="1" step=".01" value={volume} onChange={event => setVolume(Number(event.target.value))}/></label><div className="full-shortcuts"><button onClick={() => {setShowPlayer(false);openLyrics()}}><Icon name="lyrics"/>Lirik</button><button onClick={() => {setShowPlayer(false);setShowQueue(true)}}><Icon name="queue"/>Antrean</button><button onClick={shareTrack}><Icon name="share"/>Bagikan</button><button onClick={() => {setShowPlayer(false);setShowSleep(true)}}><Icon name="timer"/>Timer</button></div></section></div>}
 
       {showQueue && <div className="modal-backdrop" onClick={() => setShowQueue(false)}><section className="sheet glass" onClick={event => event.stopPropagation()}><div className="modal-head"><div><small>UP NEXT</small><h2>Antrean lagu</h2></div><button onClick={() => setShowQueue(false)}><Icon name="close"/></button></div><RankedList items={queue.map((track,index) => ({track,count:index+1}))} onPlay={track => { playTrack(track, queue); setShowQueue(false) }}/></section></div>}
 
@@ -739,7 +726,7 @@ function App() {
         </>}
       </section></div>}
 
-      {showImport && <div className="modal-backdrop" onClick={() => setShowImport(false)}><section className="sheet glass" onClick={event => event.stopPropagation()}><div className="modal-head"><div><small>PLAYLIST TRANSFER</small><h2>Impor playlist</h2></div><button onClick={() => setShowImport(false)}><Icon name="close"/></button></div><p className="muted-note">Tempel link playlist Spotify atau Apple Music. Maksimal 100 lagu pertama.</p><input className="import-input" value={importUrl} onChange={event => setImportUrl(event.target.value)} placeholder="https://open.spotify.com/playlist/..."/>{importError && <div className="error-box">{importError}</div>}<button className="primary-action" disabled={!importUrl.trim() || importLoading} onClick={importLink}>{importLoading ? 'Mengimpor playlist...' : 'Impor playlist'}</button><p className="muted-note">Impor membutuhkan konfigurasi API provider di Vercel. Metadata lagu dari Spotify/Apple tidak diputar langsung di Yinn Lycs.</p></section></div>}
+      {showImport && <div className="modal-backdrop" onClick={() => setShowImport(false)}><section className="sheet glass" onClick={event => event.stopPropagation()}><div className="modal-head"><div><small>PLAYLIST TRANSFER</small><h2>Impor playlist</h2></div><button onClick={() => setShowImport(false)}><Icon name="close"/></button></div><p className="muted-note">Tempel link playlist Spotify. Lagu yang bisa diputar akan dicocokkan ke katalog Audius.</p><input className="import-input" value={importUrl} onChange={event => setImportUrl(event.target.value)} placeholder="https://open.spotify.com/playlist/..."/>{importError && <div className="error-box">{importError}</div>}<button className="primary-action" disabled={!importUrl.trim() || importLoading} onClick={importLink}>{importLoading ? 'Mengimpor playlist...' : 'Impor playlist'}</button><p className="muted-note">Impor membutuhkan konfigurasi API provider di Vercel. Playlist hanya membawa metadata. Audio diputar oleh player Yinn Lycs jika tersedia di Audius.</p></section></div>}
     </div>
   )
 }
