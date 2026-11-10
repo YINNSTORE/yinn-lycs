@@ -256,3 +256,7 @@ img{display:block;max-width:100%}
 .artist-library-row>div{min-width:0;flex:1;display:flex;flex-direction:column;gap:4px}
 .artist-library-row b{font-size:12px}.artist-library-row small{font-size:10px;color:var(--muted)}
 .artist-library-row>svg{color:var(--accent)}
+
+
+/* Keep provider playback inside Yinn Lycs. */
+.provider-embed-wrap{width:100%;margin:18px 0 10px;padding:12px;border:1px solid var(--line);border-radius:20px;background:rgba(255,255,255,.045);overflow:hidden}.provider-embed-label{font-size:9px;letter-spacing:1.5px;font-weight:800;color:var(--accent);margin:0 0 10px 4px}.provider-embed{display:block;width:100%;height:175px;border:0;border-radius:13px;background:#111;overflow:hidden}.full-player:has(.provider-embed){max-height:92vh;overflow-y:auto}.mini-player .player-capsule-actions{display:none!important}
