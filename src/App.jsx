@@ -72,6 +72,7 @@ function parseSyncedLyrics(value) {
 
 function App() {
   const audioRef = useRef(null)
+  const streamAttemptRef = useRef(0)
   const navTouchStart = useRef(null)
   const searchTimer = useRef(null)
   const sleepRef = useRef(null)
@@ -86,6 +87,8 @@ function App() {
   const [playlists, setPlaylists] = useState(() => readStorage('yinn-v2-playlists', []))
   const [queue, setQueue] = useState([])
   const [activeTrack, setActiveTrack] = useState(null)
+  const [providerEmbedUrl, setProviderEmbedUrl] = useState('')
+  const [providerEmbedType, setProviderEmbedType] = useState('')
   const [playing, setPlaying] = useState(false)
   const [loading, setLoading] = useState(true)
   const [searchLoading, setSearchLoading] = useState(false)
@@ -278,18 +281,39 @@ function App() {
     : tab === 'Library' ? (libraryFilter === 'Disukai' ? favorites : libraryFilter === 'Top 50' ? topPlayed.map(item => item.track) : libraryFilter === 'Playlist' ? playlists.flatMap(item => item.tracks || []) : favorites)
     : tab === 'History' ? history : tracks
 
-  const playTrack = useCallback((track, sourceList = tracks) => {
+  const playTrack = useCallback(async (track, sourceList = tracks, allowAudiusMatch = true) => {
     if (!track) return
-    if (track.source !== 'audius' && track.trackViewUrl) {
-      window.open(track.trackViewUrl, '_blank', 'noopener,noreferrer')
+    if (activeTrack?.id === track.id && track.source === 'audius') {
+      if (audioRef.current?.paused) audioRef.current.play().catch(() => setError('Gagal melanjutkan audio.'))
+      else audioRef.current?.pause()
       return
     }
-    if (!audioRef.current) return
-    if (activeTrack?.id === track.id) {
-      if (audioRef.current.paused) audioRef.current.play().catch(() => setError('Gagal melanjutkan audio.'))
-      else audioRef.current.pause()
-      return
+
+    // For Apple catalog results, first look for the same recording in Audius.
+    if (track.source === 'apple' && allowAudiusMatch) {
+      try {
+        const search = await searchTracks(track.title + ' ' + getArtist(track))
+        const normalize = value => String(value || '').toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9]+/g, ' ').trim()
+        const wantedTitle = normalize(track.title)
+        const wantedArtist = normalize(getArtist(track))
+        const match = (search.data || []).find(candidate =>
+          candidate.source === 'audius' &&
+          normalize(candidate.title) === wantedTitle &&
+          normalize(getArtist(candidate)).includes(wantedArtist)
+        ) || (search.data || []).find(candidate =>
+          candidate.source === 'audius' && normalize(candidate.title) === wantedTitle
+        )
+        if (match) {
+          await playTrack(match, sourceList, false)
+          return
+        }
+      } catch (error) {
+        console.warn('Audius exact-track fallback unavailable:', error)
+      }
     }
+
     const nextQueue = Array.isArray(sourceList) && sourceList.length ? sourceList : tracks
     setQueue(nextQueue)
     setActiveTrack(track)
@@ -298,13 +322,31 @@ function App() {
     setError('')
     setHistory(previous => [track, ...previous.filter(item => item.id !== track.id)].slice(0, 100))
     setPlays(previous => [...previous, { track, at: Date.now() }].slice(-2000))
+
+    if (track.source === 'apple' || track.source === 'spotify') {
+      audioRef.current?.pause()
+      setPlaying(false)
+      setProviderEmbedType(track.source)
+      setProviderEmbedUrl(track.embedUrl || (
+        track.source === 'apple'
+          ? String(track.trackViewUrl || '').replace('https://music.apple.com/', 'https://embed.music.apple.com/').replace('https://itunes.apple.com/', 'https://embed.music.apple.com/')
+          : 'https://open.spotify.com/embed/track/' + String(track.id).replace(/^spotify-/, '')
+      ))
+      setShowPlayer(true)
+      return
+    }
+
+    if (!audioRef.current) return
+    setProviderEmbedType('')
+    setProviderEmbedUrl('')
+    streamAttemptRef.current = 0
     const audio = audioRef.current
-    audio.src = getStreamUrl(track.id)
+    audio.src = getStreamUrl(track.id, 0)
     audio.volume = volume
     audio.load()
     audio.play().catch(() => {
       setPlaying(false)
-      setError('Lagu ini tidak bisa diputar. Coba track Audius lainnya.')
+      setError('Pemutaran gagal. Mencoba server streaming cadangan...')
     })
   }, [activeTrack, tracks, volume])
 
@@ -332,6 +374,7 @@ function App() {
   const isFavorite = track => favorites.some(item => item.id === track?.id)
   const togglePlayback = () => {
     if (!activeTrack) { if (tracks[0]) playTrack(tracks[0], tracks); return }
+    if (providerEmbedUrl) { setShowPlayer(true); return }
     if (audioRef.current?.paused) audioRef.current.play().catch(() => setError('Gagal memutar lagu.'))
     else audioRef.current?.pause()
   }
@@ -580,7 +623,16 @@ function App() {
         </>}
       </main>
 
-      <audio ref={audioRef} preload="none" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onTimeUpdate={event => setCurrentTime(event.currentTarget.currentTime)} onLoadedMetadata={event => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)} onEnded={() => { if (sleepChoice === 'end') setSleepChoice('off'); else playNext() }} onError={() => { setPlaying(false); setError('Stream lagu ini tidak tersedia. Coba lagu Audius lain.') }}/>
+      <audio ref={audioRef} preload="none" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onTimeUpdate={event => setCurrentTime(event.currentTarget.currentTime)} onLoadedMetadata={event => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)} onEnded={() => { if (sleepChoice === 'end') setSleepChoice('off'); else playNext() }} onError={() => {
+        if (activeTrack?.source === 'audius' && streamAttemptRef.current === 0) {
+          streamAttemptRef.current = 1
+          const audio = audioRef.current
+          if (audio) { audio.src = getStreamUrl(activeTrack.id, 1); audio.load(); audio.play().catch(() => { setPlaying(false); setError('Track ini sedang tidak tersedia di kedua server Audius.') }) }
+          return
+        }
+        setPlaying(false)
+        if (activeTrack?.source === 'audius') setError('Track ini sedang tidak tersedia di kedua server Audius. Coba lagu lain.')
+      }}/> 
 
       <div className={'bottom-dock' + (scrolled && collapseNav ? ' collapsed' : '')}>
         <nav className="mobile-nav glass" aria-label="Navigasi utama" onTouchStart={event => { navTouchStart.current = event.touches[0]?.clientX }} onTouchEnd={event => { const end = event.changedTouches[0]?.clientX; if (navTouchStart.current == null || end == null) return; const delta = end - navTouchStart.current; navTouchStart.current = null; if (Math.abs(delta) < 38 || (scrolled && collapseNav)) return; const tabs = ['Home','Search','Library']; const index = Math.max(0, tabs.indexOf(tab)); setTab(tabs[Math.max(0, Math.min(tabs.length - 1, index + (delta < 0 ? 1 : -1)))]) }}>
@@ -597,12 +649,6 @@ function App() {
           <button className="mini-play" onClick={togglePlayback} aria-label={playing ? 'Jeda' : 'Putar'}><Icon name={playing ? 'pause' : 'play'} size={21}/></button>
           <button onClick={playNext} aria-label="Berikutnya"><Icon name="next" size={22}/></button>
           <div className="mini-progress" style={{'--progress': (duration ? currentTime / duration * 100 : 0) + '%'}}/>
-          <div className="player-capsule-actions">
-            <button onClick={openLyrics} title="Lirik"><Icon name="lyrics" size={17}/></button>
-            <button onClick={() => setShowQueue(true)} title="Antrean"><Icon name="queue" size={17}/></button>
-            <button onClick={shareTrack} title="Bagikan"><Icon name="share" size={17}/></button>
-            <button onClick={() => setShowSleep(true)} title="Timer tidur"><Icon name="timer" size={17}/></button>
-          </div>
         </section>
       </div>
 
@@ -639,7 +685,7 @@ function App() {
         {settingsTab === 'Tentang' && <div className="settings-content"><p>Yinn Lycs v2.0.0</p><p>Semua fitur inti gratis. Streaming, katalog, dan lirik bergantung pada ketersediaan layanan sumber.</p><button className="primary-action" onClick={() => { setSettingsOpen(false); setTab('About') }}>Tentang Yinn Lycs</button></div>}
       </section></div>}
 
-      {showPlayer && <div className="modal-backdrop" onClick={() => setShowPlayer(false)}><section className="full-player glass" onClick={event => event.stopPropagation()}><div className="modal-head"><div><small>NOW PLAYING</small><h2>Music player</h2></div><button onClick={() => setShowPlayer(false)}><Icon name="close"/></button></div><div className="full-art">{activeTrack && getArtwork(activeTrack) ? <img src={getArtwork(activeTrack)} alt=""/> : <Icon name="library" size={64}/>}</div><div className="full-track-meta"><b>{activeTrack?.title || 'Pilih lagu'}</b><span>{activeTrack ? getArtist(activeTrack) : 'Yinn Lycs'}</span></div><div className="full-timeline"><span>{formatDuration(currentTime)}</span><input type="range" min="0" max={duration || 0} step="0.1" value={Math.min(currentTime,duration || 0)} onChange={event => { if(audioRef.current) audioRef.current.currentTime=Number(event.target.value) }}/><span>{formatDuration(duration)}</span></div><div className="full-controls"><button onClick={playPrevious}><Icon name="prev" size={28}/></button><button className="full-play" onClick={togglePlayback}><Icon name={playing ? 'pause' : 'play'} size={27}/></button><button onClick={playNext}><Icon name="next" size={28}/></button></div><label className="full-volume"><Icon name="volume"/><input type="range" min="0" max="1" step=".01" value={volume} onChange={event => setVolume(Number(event.target.value))}/></label><div className="full-shortcuts"><button onClick={() => {setShowPlayer(false);openLyrics()}}><Icon name="lyrics"/>Lirik</button><button onClick={() => {setShowPlayer(false);setShowQueue(true)}}><Icon name="queue"/>Antrean</button><button onClick={shareTrack}><Icon name="share"/>Bagikan</button><button onClick={() => {setShowPlayer(false);setShowSleep(true)}}><Icon name="timer"/>Timer</button></div></section></div>}
+      {showPlayer && <div className="modal-backdrop" onClick={() => setShowPlayer(false)}><section className="full-player glass" onClick={event => event.stopPropagation()}><div className="modal-head"><div><small>NOW PLAYING</small><h2>Music player</h2></div><button onClick={() => setShowPlayer(false)}><Icon name="close"/></button></div><div className="full-art">{activeTrack && getArtwork(activeTrack) ? <img src={getArtwork(activeTrack)} alt=""/> : <Icon name="library" size={64}/>}</div><div className="full-track-meta"><b>{activeTrack?.title || 'Pilih lagu'}</b><span>{activeTrack ? getArtist(activeTrack) : 'Yinn Lycs'}</span></div>{providerEmbedUrl ? <div className="provider-embed-wrap"><div className="provider-embed-label">{providerEmbedType === 'apple' ? 'APPLE MUSIC PLAYER' : 'SPOTIFY PLAYER'}</div><iframe className="provider-embed" src={providerEmbedUrl} title={(activeTrack?.title || 'Music') + ' official music player'} allow="autoplay *; encrypted-media *; fullscreen *; clipboard-write" loading="lazy"/></div> : <><div className="full-timeline"><span>{formatDuration(currentTime)}</span><input type="range" min="0" max={duration || 0} step="0.1" value={Math.min(currentTime,duration || 0)} onChange={event => { if(audioRef.current) audioRef.current.currentTime=Number(event.target.value) }}/><span>{formatDuration(duration)}</span></div><div className="full-controls"><button onClick={playPrevious}><Icon name="prev" size={28}/></button><button className="full-play" onClick={togglePlayback}><Icon name={playing ? 'pause' : 'play'} size={27}/></button><button onClick={playNext}><Icon name="next" size={28}/></button></div><label className="full-volume"><Icon name="volume"/><input type="range" min="0" max="1" step=".01" value={volume} onChange={event => setVolume(Number(event.target.value))}/></label></>}<div className="full-shortcuts"><button onClick={() => {setShowPlayer(false);openLyrics()}}><Icon name="lyrics"/>Lirik</button><button onClick={() => {setShowPlayer(false);setShowQueue(true)}}><Icon name="queue"/>Antrean</button><button onClick={shareTrack}><Icon name="share"/>Bagikan</button><button onClick={() => {setShowPlayer(false);setShowSleep(true)}}><Icon name="timer"/>Timer</button></div></section></div>}
 
       {showQueue && <div className="modal-backdrop" onClick={() => setShowQueue(false)}><section className="sheet glass" onClick={event => event.stopPropagation()}><div className="modal-head"><div><small>UP NEXT</small><h2>Antrean lagu</h2></div><button onClick={() => setShowQueue(false)}><Icon name="close"/></button></div><RankedList items={queue.map((track,index) => ({track,count:index+1}))} onPlay={track => { playTrack(track, queue); setShowQueue(false) }}/></section></div>}
 
