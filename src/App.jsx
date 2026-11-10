@@ -59,6 +59,13 @@ function Icon({ name, size = 21, strokeWidth = 2.2 }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name] || paths.sparkle}</svg>
 }
 
+function getAlbumName(track) {
+  if (typeof track?.album === 'string' && track.album.trim()) return track.album
+  if (track?.album?.name) return track.album.name
+  if (track?.album?.title) return track.album.title
+  return track?.collectionName || 'Single'
+}
+
 function parseSyncedLyrics(value) {
   return String(value || '').split('\n').map(line => line.replace(/^\[[0-9:.]+\]\s*/, '')).filter(Boolean).join('\n')
 }
@@ -242,6 +249,16 @@ function App() {
     }
     return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 50)
   }, [plays])
+
+  const libraryAlbums = useMemo(() => {
+    const groups = new Map()
+    for (const track of [...favorites, ...history]) {
+      const name = getAlbumName(track)
+      if (!groups.has(name)) groups.set(name, [])
+      groups.get(name).push(track)
+    }
+    return [...groups.entries()].map(([name, items]) => ({ name, tracks: items }))
+  }, [favorites, history])
 
   const favoriteArtists = useMemo(() => {
     const counts = new Map()
@@ -496,6 +513,8 @@ function App() {
       <main className="main-content">
         {tab === 'Home' && <>
           <section className="greeting"><h1>{greeting}</h1><p>Musik yang cocok untuk hari ini.</p></section>
+          {loading && <div className="status"><span className="spinner"/> Memuat musik...</div>}
+          {error && <div className="error-box">{error}</div>}
           <section className="quick-grid">
             {(history.slice(0, 6).length ? history.slice(0, 6) : tracks.slice(0, 6)).map((track, index) => <button className="quick-card glass" key={track.id || index} onClick={() => playTrack(track, history.length ? history : tracks)}>
               <div className="quick-art">{getArtwork(track) ? <img src={getArtwork(track)} alt="" /> : <Icon name="library" size={27}/>}</div><span>{track.title}</span>
@@ -541,7 +560,7 @@ function App() {
             <button className="library-tile" onClick={() => setLibraryFilter('Cache')}><div><Icon name="timer" size={68}/></div><b>Tersimpan di cache</b></button>
             <button className="library-tile" onClick={() => setLibraryFilter('Top 50')}><div><Icon name="chart" size={68}/></div><b>Teratas saya 50</b></button>
             {playlists.map(item => <button className="library-tile imported-tile" key={item.id} onClick={() => setLibraryFilter(item.id)}><div>{item.image ? <img src={item.image} alt=""/> : <Icon name="library" size={50}/>}</div><b>{item.name}</b><small>{item.tracks.length} lagu</small></button>)}
-          </div> : libraryFilter === 'Diunduh' || libraryFilter === 'Cache' ? <div className="empty-card"><Icon name="download" size={44}/><b>{libraryFilter === 'Diunduh' ? 'Belum ada lagu offline' : 'Cache lokal belum tersedia'}</b><p>Yinn Lycs memutar musik online dan tidak mengunduh audio tanpa izin pemilik hak.</p></div> : <TrackList tracks={libraryFilter === 'Top 50' ? topPlayed.map(item => item.track) : libraryFilter === 'Disukai' || libraryFilter === 'Lagu' ? favorites : playlists.find(item => item.id === libraryFilter)?.tracks || []} activeTrack={activeTrack} playing={playing} isFavorite={isFavorite} onPlay={playTrack} onFavorite={toggleFavorite}/>}
+          </div> : libraryFilter === 'Diunduh' || libraryFilter === 'Cache' ? <div className="empty-card"><Icon name="download" size={44}/><b>{libraryFilter === 'Diunduh' ? 'Belum ada lagu offline' : 'Cache lokal belum tersedia'}</b><p>Yinn Lycs memutar musik online dan tidak mengunduh audio tanpa izin pemilik hak.</p></div> : libraryFilter === 'Album' ? <div className="library-grid">{libraryAlbums.map(album => <button className="library-tile imported-tile" key={album.name} onClick={() => playTrack(album.tracks[0], album.tracks)}><div>{getArtwork(album.tracks[0]) ? <img src={getArtwork(album.tracks[0])} alt=""/> : <Icon name="library" size={48}/>}</div><b>{album.name}</b><small>{album.tracks.length} track tersimpan</small></button>)}</div> : libraryFilter === 'Artis' ? <div className="artist-library">{favoriteArtists.map(([artist,count]) => <button className="artist-library-row" key={artist} onClick={() => { const group = favorites.filter(item => getArtist(item) === artist); if (group[0]) playTrack(group[0], group) }}><span>{artist.slice(0,1).toUpperCase()}</span><div><b>{artist}</b><small>{count} lagu disukai</small></div><Icon name="arrow" size={16}/></button>)}</div> : libraryFilter === 'Podcast' ? <div className="empty-card"><Icon name="mic" size={44}/><b>Podcast belum tersedia</b><p>Katalog podcast akan ditambahkan pada pembaruan berikutnya.</p></div> : <TrackList tracks={libraryFilter === 'Top 50' ? topPlayed.map(item => item.track) : libraryFilter === 'Disukai' || libraryFilter === 'Lagu' ? favorites : playlists.find(item => item.id === libraryFilter)?.tracks || []} activeTrack={activeTrack} playing={playing} isFavorite={isFavorite} onPlay={playTrack} onFavorite={toggleFavorite}/>}
         </>}
 
         {tab === 'History' && <section className="section-block"><h2>Terakhir diputar</h2><RankedList items={history.map((track,index) => ({track,count:index+1}))} onPlay={playTrack}/></section>}
