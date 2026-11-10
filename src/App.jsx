@@ -518,7 +518,7 @@ function App() {
         </>}
 
         {tab === 'Search' && <>
-          <div className="search-field glass"><button onClick={() => setTab('Home')} aria-label="Kembali"><Icon name="back"/></button><input placeholder="Cari lagu, album, artis..." value={query} onChange={event => setQuery(event.target.value)}/><button aria-label="Terjemahkan" onClick={() => { setShowLyrics(true); openLyrics() }}><Icon name="translate"/></button></div>
+          <div className="search-field glass"><button onClick={() => setTab('Home')} aria-label="Kembali"><Icon name="back"/></button><input placeholder="Cari lagu, album, artis..." value={query} onChange={event => setQuery(event.target.value)}/><button aria-label="Hapus pencarian" onClick={() => setQuery('')}><Icon name="close"/></button></div>
           {query.trim().length >= 2 ? <>
             {searchLoading && <div className="status"><span className="spinner"/> Mencari katalog musik...</div>}
             {error && <div className="error-box">{error}</div>}
