@@ -60,7 +60,9 @@ export function getArtist(track) {
 }
 
 export function getGenre(track) {
-  return track?.genre || track?.genre_name || track?.tags?.split(',')[0] || 'Lainnya'
+  const tags = track?.tags
+  const tag = typeof tags === 'string' ? tags.split(',')[0] : Array.isArray(tags) ? tags[0] : ''
+  return track?.genre || track?.genre_name || tag || 'Lainnya'
 }
 
 export function formatDuration(value) {
