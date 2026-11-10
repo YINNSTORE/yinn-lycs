@@ -5,6 +5,15 @@ const AUDIO_HOSTS = [
 
 const APPLE_STORES = ['ID', 'US', 'GB', 'JP', 'KR', 'AU', 'IN', 'BR']
 
+function appleEmbedUrl(raw) {
+  try {
+    const url = new URL(raw)
+    if (!url.hostname.endsWith('apple.com')) return ''
+    url.hostname = 'embed.music.apple.com'
+    return url.toString()
+  } catch { return '' }
+}
+
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, {
     ...options,
@@ -62,6 +71,7 @@ async function searchApple(query) {
         genre: track.primaryGenreName || '',
         country,
         trackViewUrl: track.trackViewUrl,
+        embedUrl: appleEmbedUrl(track.trackViewUrl),
         collectionViewUrl: track.collectionViewUrl || '',
         source: 'apple',
         sourceLabel: 'Apple Music',
@@ -150,7 +160,8 @@ async function spotifyPlaylist(playlistId) {
     source: 'spotify',
     sourceLabel: 'Spotify',
     playable: false,
-    trackViewUrl: track.external_urls?.spotify || ''
+    trackViewUrl: track.external_urls?.spotify || '',
+    embedUrl: 'https://open.spotify.com/embed/track/' + track.id
   }))
   return {
     name: details.name || 'Spotify Playlist',
@@ -188,7 +199,8 @@ async function applePlaylist(playlistId, storefront) {
     source: 'apple',
     sourceLabel: 'Apple Music',
     playable: false,
-    trackViewUrl: track.attributes?.url || ''
+    trackViewUrl: track.attributes?.url || '',
+    embedUrl: appleEmbedUrl(track.attributes?.url || '')
   }))
   return {
     name: playlist?.attributes?.name || 'Apple Music Playlist',
@@ -320,9 +332,11 @@ export default async function handler(req, res) {
     if (action === 'stream') {
       if (!/^[a-zA-Z0-9_-]+$/.test(id)) return res.status(400).json({ error: 'Track ID tidak valid.' })
       const audiusId = id.replace(/^audius-/, '')
-      res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300')
+      const providerIndex = Number(req.query.provider) === 1 ? 1 : 0
+      const host = AUDIO_HOSTS[providerIndex]
+      res.setHeader('Cache-Control', 'no-store')
       res.statusCode = 302
-      res.setHeader('Location', 'https://api.audius.co/v1/tracks/' + encodeURIComponent(audiusId) + '/stream?app_name=YinnLycs')
+      res.setHeader('Location', host + '/tracks/' + encodeURIComponent(audiusId) + '/stream?app_name=YinnLycs')
       return res.end()
     }
 
