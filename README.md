@@ -2,18 +2,15 @@
 
 Personal music discovery and streaming web app built with React, Vite, and Vercel Functions.
 
-## v2.0.0
+## v2.0.2
 
-- Redesigned mobile-first Liquid Glass interface inspired by the supplied player screenshots.
-- Collapsible bottom navigation and attached mini-player while scrolling.
-- Full player with seek and volume controls; lyrics, queue, share and sleep timer shortcuts.
-- 16 font choices, font-weight control, theme presets, custom accent colors and night mode.
-- In-app Dynamic Island, Ambient mode, optional animated artwork and Auralys Glass widget card.
-- Listening Recap for this year, last 30 days and all time, with shareable poster.
-- Search page sections for recent plays, most-played tracks, favorite artists and genres.
-- Playlist import UI for Spotify and Apple Music links (provider credentials required).
-- Lyrics lookup through LRCLIB and Google Translate without a key; optional Gemini and DeepL translation.
-- Search AI is disabled in v2.
+- Search results come only from Audius.
+- Every playable song is streamed by the native Yinn Lycs HTML5 audio player through the server-side Audius API proxy.
+- No third-party embedded player is used.
+- Spotify playlist import is metadata-only; imported tracks are matched against Audius before playback.
+- Audius search merges both discovery providers and filters tracks that are gated or not streamable.
+- Stream requests forward audio range headers and preserve partial-content responses where available.
+- Keeps the v2 Liquid Glass interface, themes, font settings, listening recap, lyrics, queue, sleep timer and library.
 
 ## Provider configuration
 
@@ -21,36 +18,28 @@ Add secrets in Vercel → Project → Settings → Environment Variables. Never 
 
 | Variable | Purpose | Required |
 | --- | --- | --- |
-| AUDIUS_API_BEARER_TOKEN | Private Audius Bearer token used server-side for catalog and stream requests | Recommended |\n| SPOTIFY_CLIENT_ID | Read public Spotify playlist metadata | For Spotify import |
-| SPOTIFY_CLIENT_SECRET | Server-side Spotify client credentials | For Spotify import |
-| APPLE_MUSIC_DEVELOPER_TOKEN | Apple Music catalog playlist metadata | For Apple Music import |
+| AUDIUS_API_BEARER_TOKEN | Server-side Audius Bearer token for catalog and stream requests | Recommended |
+| SPOTIFY_CLIENT_ID | Read public Spotify playlist metadata | Optional, Spotify import only |
+| SPOTIFY_CLIENT_SECRET | Server-side Spotify client credentials | Optional, Spotify import only |
 | GEMINI_API_KEY | Optional Gemini lyrics translation | Optional |
 | DEEPL_API_KEY | Optional DeepL translation | Optional |
 
-After adding or changing variables, redeploy the Vercel project. For Audius, create the variable name exactly as `AUDIUS_API_BEARER_TOKEN` and paste only the token value (without the `Bearer ` prefix). The token is read only by the Vercel serverless API and is never sent to the browser.
+For Audius, create the variable name exactly as `AUDIUS_API_BEARER_TOKEN` and paste only the token value (without the `Bearer ` prefix). The token is read only by the Vercel serverless API and is never sent to the browser.
 
-Spotify playlist access is subject to Spotify authorization and playlist access restrictions. The app imports metadata only; Spotify audio is never downloaded or streamed by Yinn Lycs. Apple Music catalog and imported tracks open in the official Apple Music embedded player inside Yinn Lycs. Apple Music subscribers can play full tracks in the embed; listeners without an active subscription hear a 30-second preview.
+## Playback model
+
+Yinn Lycs owns the playback interface and controls. The browser plays audio through its native HTML5 audio element; the Vercel API proxies Audius stream requests and keeps the Audius Bearer Token server-side.
+
+Search results are limited to public, streamable, non-gated tracks available in Audius. Imported Spotify playlist entries are metadata only and must be matched to a streamable Audius upload before they can play. The app does not embed or redirect to an external music player.
+
+Audius is an open music catalog, not a universal index of every commercial recording. If a recording is not available as a streamable upload in Audius, Yinn Lycs cannot stream it through the Audius API. A future expansion can add other licensed/open catalogs while keeping the same Yinn Lycs player.
 
 ## Lyrics and translation
 
 LRCLIB provides lyrics when a matching record is available. Google translation is offered without an API key through its public web translation endpoint; availability and rate limits are controlled by that service. Gemini and DeepL require the environment variables above.
 
-## Important platform limits
+## Platform notes
 
 - Dynamic Island is an in-page web UI, not an Android system-wide floating overlay. Browser Media Session controls may appear on supported Android lock screens.
 - The Auralys Glass widget is an in-app widget card. A real Android home-screen widget requires a native Android application.
-- Full Liquid Glass blur is enabled when browser support and Android version detection indicate compatibility; older Android browsers use a lighter glass fallback.
-- Recap statistics are stored locally in this browser and start counting v2 play events after the update. They do not sync across devices.
-- Offline downloads are not enabled. The library shows offline/cache placeholders rather than downloading copyrighted audio.
-- Audius tracks play in-app when their stream is available; Yinn Lycs now retries the alternate Audius discovery host if the primary stream fails. Apple Music and Spotify tracks use their official embedded players. Apple Music full-track playback requires an active Apple Music subscription; otherwise Apple provides a 30-second preview.
-
-## Development
-
-- `npm install`
-- `npm run dev` for the Vite frontend
-- `npm run build` to create the production bundle
-- Use `vercel dev` to test `/api` serverless functions locally after linking the project.
-
-## Privacy
-
-Favorites, listening history, play events, imported playlist metadata, theme, font, and settings are stored in local browser storage. They are not synced between devices.
+- Full Liquid Glass blur depends on browser support; older Android versions use the lightweight glass fallback.
