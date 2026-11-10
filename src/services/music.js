@@ -46,9 +46,9 @@ export async function translateLyrics(text, target = 'id', provider = 'google') 
   })
 }
 
-export function getStreamUrl(trackId) {
+export function getStreamUrl(trackId, provider = 0) {
   const id = encodeURIComponent(String(trackId).replace(/^audius-/, ''))
-  return API + '?action=stream&id=' + id
+  return API + '?action=stream&id=' + id + '&provider=' + (provider === 1 ? '1' : '0')
 }
 
 export function getArtwork(track) {
