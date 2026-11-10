@@ -29,27 +29,31 @@ async function fetchJson(url, options = {}) {
 }
 
 async function searchAudius(query) {
+  const collected = []
   for (const host of AUDIO_HOSTS) {
     try {
       const params = new URLSearchParams({
         app_name: 'YinnLycs',
         query,
-        limit: '20',
+        limit: '30',
         sort_method: 'relevant'
       })
       const payload = await fetchJson(host + '/tracks/search?' + params, { headers: audiusHeaders() })
-      return (payload.data || []).map(track => ({
+      const found = (payload.data || []).map(track => ({
         ...track,
         id: 'audius-' + track.id,
         source: 'audius',
         sourceLabel: 'Audius',
-        playable: true
+        playable: track.is_streamable !== false && !track.is_stream_gated
       }))
+      collected.push(...found)
     } catch (error) {
       console.error('Audius search failed:', error)
     }
   }
-  return []
+  // One provider can return HTTP 200 with an empty or incomplete index.
+  // Merge both discovery hosts before deciding that a track is unavailable.
+  return uniqueTracks(collected).slice(0, 50)
 }
 
 async function searchApple(query) {
