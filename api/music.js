@@ -242,16 +242,16 @@ async function translateText(text, target, provider) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: 'Translate the following song lyrics into ' + target + '. Preserve line breaks. Do not add explanations.\\n\\n' + text }] }],
+        contents: [{ parts: [{ text: 'Translate the following song lyrics into ' + target + '. Preserve line breaks. Do not add explanations.\n\n' + text }] }],
         generationConfig: { temperature: 0.2, maxOutputTokens: 3000 }
       }),
       signal: AbortSignal.timeout(18000)
     })
     if (!response.ok) throw new Error('Terjemahan AI gagal.')
     const result = await response.json()
-    return result.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('\\n') || ''
+    return result.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('\n') || ''
   }
-  const chunks = text.match(/[\\s\\S]{1,1600}/g) || []
+  const chunks = text.match(/[\s\S]{1,1600}/g) || []
   const translated = await Promise.all(chunks.map(async chunk => {
     const params = new URLSearchParams({ client: 'gtx', sl: 'auto', tl: target, dt: 't', q: chunk })
     const response = await fetch('https://translate.googleapis.com/translate_a/single?' + params, { signal: AbortSignal.timeout(12000) })
