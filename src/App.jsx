@@ -345,13 +345,10 @@ function App() {
         return
       }
 
+      // No Audius copy found: fall through to the official Apple Music web
+      // embed below. This stays inside Yinn Lycs instead of opening the Apple app.
       audioRef.current?.pause()
       setPlaying(false)
-      setProviderEmbedType('')
-      setProviderEmbedUrl('')
-      setShowPlayer(false)
-      setError('Lagu ini ditemukan di katalog Apple, tetapi versi streaming-nya tidak ditemukan di Audius. Yinn Lycs tidak akan mengalihkan pemutaran ke Apple Music.')
-      return
     }
 
     const nextQueue = Array.isArray(sourceList) && sourceList.length ? sourceList : tracks
@@ -363,7 +360,7 @@ function App() {
     setHistory(previous => [track, ...previous.filter(item => item.id !== track.id)].slice(0, 100))
     setPlays(previous => [...previous, { track, at: Date.now() }].slice(-2000))
 
-    if (track.source === 'spotify') {
+    if (track.source === 'apple' || track.source === 'spotify') {
       audioRef.current?.pause()
       setPlaying(false)
       setProviderEmbedType(track.source)
