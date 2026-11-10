@@ -598,6 +598,7 @@ function App() {
           <label className="range-label">Ketebalan huruf <b>{fontWeight}</b><input type="range" min="400" max="900" step="100" value={fontWeight} onChange={event => setFontWeight(Number(event.target.value))}/></label>
           <label className="switch-row">Navbar mengecil saat scroll<input type="checkbox" checked={collapseNav} onChange={event => setCollapseNav(event.target.checked)}/></label>
           <label className="switch-row">Mode Ambient<input type="checkbox" checked={ambient} onChange={event => setAmbient(event.target.checked)}/></label>
+          <button className="open-island-settings" onClick={() => setSettingsTab('Dynamic Island')}>Pengaturan Dynamic Island <Icon name="arrow" size={15}/></button>
           <label className="switch-row">Artwork bergerak <small>Default mati</small><input type="checkbox" checked={animatedArtwork} onChange={event => setAnimatedArtwork(event.target.checked)}/></label>
         </div>}
         {settingsTab === 'Pemutar' && <div className="settings-content">
