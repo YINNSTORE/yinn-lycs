@@ -1,42 +1,54 @@
-const isDev = import.meta.env.DEV
-const API = 'https://api.audius.co/v1'
+const API = '/api/music'
 
-async function request(action, extra = {}) {
+async function request(action, extra = {}, options = {}) {
   const params = new URLSearchParams({ action, ...extra })
-  let url = '/api/music?' + params.toString()
-
-  if (isDev && action !== 'search') {
-    const endpoint = action === 'latest' ? '/tracks/latest' : '/tracks/trending'
-    const directParams = new URLSearchParams({ app_name: 'YinnLycs', limit: extra.limit || '30' })
-    if (extra.offset) directParams.set('offset', extra.offset)
-    if (action === 'trending') directParams.set('time', 'week')
-    url = API + endpoint + '?' + directParams.toString()
-  }
-
-  const response = await fetch(url)
+  const response = await fetch(API + '?' + params, {
+    method: options.method || 'GET',
+    headers: options.body ? { 'Content-Type': 'application/json' } : undefined,
+    body: options.body ? JSON.stringify(options.body) : undefined
+  })
   const payload = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(payload.error || 'Tidak bisa mengambil data musik.')
+  if (!response.ok) throw new Error(payload.error || 'Layanan musik tidak tersedia.')
   return payload
 }
 
-export async function getTracks(mode) {
-  const payload = await request(mode === 'latest' ? 'latest' : 'trending', { limit: '30', offset: '0' })
+export async function getTracks(mode = 'trending') {
+  const payload = await request(mode === 'latest' ? 'latest' : 'trending', { limit: '30' })
   return Array.isArray(payload.data) ? payload.data : []
 }
 
-export async function searchTracks(query, aiEnabled = true) {
-  const payload = await request('search', { q: query, ai: aiEnabled ? '1' : '0' })
+export async function searchTracks(query) {
+  const payload = await request('search', { q: query })
   return {
     data: Array.isArray(payload.data) ? payload.data : [],
-    ai: payload.ai || { configured: false, used: false, matches: [] },
     sources: payload.sources || {}
   }
 }
 
+export async function importPlaylist(url) {
+  return request('import', {}, { method: 'POST', body: { url } })
+}
+
+export async function getLyrics(track) {
+  const params = {
+    track: track.title || track.trackName || '',
+    artist: track.user?.name || track.artist_name || track.artistName || '',
+    album: track.album || '',
+    duration: String(track.duration || '')
+  }
+  return request('lyrics', params)
+}
+
+export async function translateLyrics(text, target = 'id', provider = 'google') {
+  return request('translate', {}, {
+    method: 'POST',
+    body: { text, target, provider }
+  })
+}
+
 export function getStreamUrl(trackId) {
   const id = encodeURIComponent(String(trackId).replace(/^audius-/, ''))
-  if (isDev) return API + '/tracks/' + id + '/stream?app_name=YinnLycs'
-  return '/api/music?action=stream&id=' + id
+  return API + '?action=stream&id=' + id
 }
 
 export function getArtwork(track) {
@@ -44,13 +56,15 @@ export function getArtwork(track) {
 }
 
 export function getArtist(track) {
-  return track?.user?.name || track?.artist_name || 'Unknown artist'
+  return track?.user?.name || track?.artist_name || track?.artistName || 'Unknown artist'
+}
+
+export function getGenre(track) {
+  return track?.genre || track?.genre_name || track?.tags?.split(',')[0] || 'Lainnya'
 }
 
 export function formatDuration(value) {
   const seconds = Number(value)
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00'
-  const minutes = Math.floor(seconds / 60)
-  const remainder = Math.floor(seconds % 60).toString().padStart(2, '0')
-  return minutes + ':' + remainder
+  return Math.floor(seconds / 60) + ':' + Math.floor(seconds % 60).toString().padStart(2, '0')
 }
