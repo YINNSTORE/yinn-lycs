@@ -222,6 +222,7 @@ function App() {
               <select value={theme} onChange={event => setTheme(event.target.value)}>
                 <option value="liquid">Liquid Glass</option>
                 <option value="midnight">Midnight</option>
+                <option value="aurora">Aurora</option>
                 <option value="light">Light</option>
               </select>
             </label>
@@ -246,6 +247,7 @@ function App() {
             <div className="search-box glass-panel"><span>⌕</span><input autoFocus placeholder="Cari judul, artis, atau potongan lirik..." value={query} onChange={event => setQuery(event.target.value)} /><button onClick={() => setQuery('')} aria-label="Hapus pencarian">×</button></div>
             <div className="search-tools"><p className="search-hint">Cari judul, penyanyi, atau potongan lirik lagu.</p><button className={'ai-toggle' + (aiEnabled ? ' enabled' : '')} onClick={() => setAiEnabled(value => !value)}><span>✦</span> AI Lirik {aiEnabled ? 'ON' : 'OFF'}</button></div>
             {aiEnabled && aiInfo && !aiInfo.configured && <div className="ai-notice">✦ AI lirik belum diaktifkan. Tambahkan <code>GEMINI_API_KEY</code> di Vercel agar pencarian potongan lirik bisa mengenali judul lagu.</div>}
+            {aiEnabled && aiInfo?.error && <div className="ai-notice">✦ {aiInfo.error}</div>}
             {aiInfo?.used && <div className="ai-match-banner"><div className="ai-banner-title">✦ AI menemukan kemungkinan lagu</div>{aiInfo.matches.map((match,index) => <div className="ai-match-row" key={match.searchQuery + index}><b>{match.title}</b><span>{match.artist}</span><small>{match.reason}</small></div>)}</div>}
           </section>
         )}
