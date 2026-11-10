@@ -399,6 +399,8 @@ function App() {
   const isFavorite = track => favorites.some(item => item.id === track?.id)
   const togglePlayback = () => {
     if (!activeTrack) { if (tracks[0]) playTrack(tracks[0], tracks); return }
+    const isAudiusTrack = activeTrack.source === 'audius' || String(activeTrack.id || '').startsWith('audius-')
+    if (!isAudiusTrack) { playTrack(activeTrack, queue); return }
     if (audioRef.current?.paused) audioRef.current.play().catch(() => setError('Gagal memutar lagu.'))
     else audioRef.current?.pause()
   }
