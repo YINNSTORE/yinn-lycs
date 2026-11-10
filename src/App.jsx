@@ -65,6 +65,7 @@ function parseSyncedLyrics(value) {
 
 function App() {
   const audioRef = useRef(null)
+  const navTouchStart = useRef(null)
   const searchTimer = useRef(null)
   const sleepRef = useRef(null)
   const [tab, setTab] = useState('Home')
@@ -563,7 +564,7 @@ function App() {
       <audio ref={audioRef} preload="none" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onTimeUpdate={event => setCurrentTime(event.currentTarget.currentTime)} onLoadedMetadata={event => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)} onEnded={() => { if (sleepChoice === 'end') setSleepChoice('off'); else playNext() }} onError={() => { setPlaying(false); setError('Stream lagu ini tidak tersedia. Coba lagu Audius lain.') }}/>
 
       <div className={'bottom-dock' + (scrolled && collapseNav ? ' collapsed' : '')}>
-        <nav className="mobile-nav glass" aria-label="Navigasi utama">
+        <nav className="mobile-nav glass" aria-label="Navigasi utama" onTouchStart={event => { navTouchStart.current = event.touches[0]?.clientX }} onTouchEnd={event => { const end = event.changedTouches[0]?.clientX; if (navTouchStart.current == null || end == null) return; const delta = end - navTouchStart.current; navTouchStart.current = null; if (Math.abs(delta) < 38 || (scrolled && collapseNav)) return; const tabs = ['Home','Search','Library']; const index = Math.max(0, tabs.indexOf(tab)); setTab(tabs[Math.max(0, Math.min(tabs.length - 1, index + (delta < 0 ? 1 : -1)))]) }}>
           {scrolled && collapseNav ? <button className="nav-orb" onClick={() => setTab(tab === 'Home' ? 'Search' : 'Home')}><Icon name={tab === 'Home' ? 'home' : tab === 'Search' ? 'search' : 'library'} size={25}/></button> : <>
             <button className={tab === 'Home' ? 'active' : ''} onClick={() => setTab('Home')}><Icon name="home"/><small>Beranda</small></button>
             <button className={tab === 'Search' ? 'active' : ''} onClick={() => setTab('Search')}><Icon name="search"/><small>Cari</small></button>
