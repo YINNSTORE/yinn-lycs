@@ -98,6 +98,9 @@ function App() {
   const [islandStyle, setIslandStyle] = useState(() => readStorage('yinn-v2-island-style', 'capsule'))
   const [islandSize, setIslandSize] = useState(() => readStorage('yinn-v2-island-size', 100))
   const [islandGlow, setIslandGlow] = useState(() => readStorage('yinn-v2-island-glow', true))
+  const [islandPosition, setIslandPosition] = useState(() => readStorage('yinn-v2-island-position', 'center'))
+  const [islandPreset, setIslandPreset] = useState(() => readStorage('yinn-v2-island-preset', 'classic'))
+  const [showPlayer, setShowPlayer] = useState(false)
   const [ambient, setAmbient] = useState(() => readStorage('yinn-v2-ambient', false))
   const [animatedArtwork, setAnimatedArtwork] = useState(() => readStorage('yinn-v2-animated', false))
   const [showQueue, setShowQueue] = useState(false)
@@ -125,7 +128,12 @@ function App() {
   const [recapPeriod, setRecapPeriod] = useState('year')
   const [showRecapPoster, setShowRecapPoster] = useState(false)
   const [supportUrl, setSupportUrl] = useState(() => readStorage('yinn-v2-support', ''))
-  const [fontGlass, setFontGlass] = useState(() => CSS.supports?.('backdrop-filter', 'blur(20px)') || CSS.supports?.('-webkit-backdrop-filter', 'blur(20px)') || false)
+  const [fontGlass, setFontGlass] = useState(() => {
+    const android = navigator.userAgent.match(/Android\\s([0-9]+)/i)
+    const androidVersion = android ? Number(android[1]) : 99
+    const supportsBlur = CSS.supports?.('backdrop-filter', 'blur(20px)') || CSS.supports?.('-webkit-backdrop-filter', 'blur(20px)')
+    return Boolean(supportsBlur && androidVersion >= 13)
+  })
 
   useEffect(() => {
     let alive = true
@@ -167,6 +175,8 @@ function App() {
   useEffect(() => persist('yinn-v2-island-style', islandStyle), [islandStyle])
   useEffect(() => persist('yinn-v2-island-size', islandSize), [islandSize])
   useEffect(() => persist('yinn-v2-island-glow', islandGlow), [islandGlow])
+  useEffect(() => persist('yinn-v2-island-position', islandPosition), [islandPosition])
+  useEffect(() => persist('yinn-v2-island-preset', islandPreset), [islandPreset])
   useEffect(() => persist('yinn-v2-ambient', ambient), [ambient])
   useEffect(() => persist('yinn-v2-animated', animatedArtwork), [animatedArtwork])
   useEffect(() => persist('yinn-v2-support', supportUrl), [supportUrl])
@@ -467,7 +477,7 @@ function App() {
 
   return (
     <div className={'app-shell' + (ambient ? ' ambient-mode' : '') + (animatedArtwork ? ' artwork-motion' : '')} data-glass={fontGlass ? 'enhanced' : 'lite'}>
-      {dynamicIsland && playing && <div className={'dynamic-island ' + islandStyle + (islandOpen ? ' expanded' : '') + (islandGlow ? ' glowing' : '')} style={{'--island-scale': islandSize / 100}} onClick={() => setIslandOpen(value => !value)}>
+      {dynamicIsland && playing && <div className={'dynamic-island ' + islandStyle + ' pos-' + islandPosition + ' preset-' + islandPreset + (islandOpen ? ' expanded' : '') + (islandGlow ? ' glowing' : '')} style={{'--island-scale': islandSize / 100}} onClick={() => setIslandOpen(value => !value)}>
         <div className="island-mini"><span className="island-dot" /><span className="island-title">{activeTrack?.title || 'Yinn Lycs'}</span><span className="island-wave">▂ ▅ ▃ ▆</span></div>
         {islandOpen && <div className="island-expanded"><b>{activeTrack?.title}</b><small>{getArtist(activeTrack)}</small><div><button onClick={event => { event.stopPropagation(); playPrevious() }}><Icon name="prev"/></button><button onClick={event => { event.stopPropagation(); togglePlayback() }}><Icon name="pause"/></button><button onClick={event => { event.stopPropagation(); playNext() }}><Icon name="next"/></button></div></div>}
       </div>}
@@ -562,7 +572,7 @@ function App() {
         </nav>
         <section className="mini-player glass" aria-label="Pemutar mini">
           <div className="mini-player-art">{activeTrack && getArtwork(activeTrack) ? <img src={getArtwork(activeTrack)} alt=""/> : <Icon name="library" size={22}/>}</div>
-          <div className="mini-player-meta"><b>{activeTrack?.title || 'Pilih lagu'}</b><small>{activeTrack ? getArtist(activeTrack) : 'Yinn Lycs'}</small></div>
+          <button className="mini-player-meta" onClick={() => setShowPlayer(true)}><b>{activeTrack?.title || 'Pilih lagu'}</b><small>{activeTrack ? getArtist(activeTrack) : 'Yinn Lycs'}</small></button>
           <button onClick={() => activeTrack && toggleFavorite(activeTrack)} aria-label="Sukai">{activeTrack && isFavorite(activeTrack) ? '♥' : '♡'}</button>
           <button className="mini-play" onClick={togglePlayback} aria-label={playing ? 'Jeda' : 'Putar'}><Icon name={playing ? 'pause' : 'play'} size={21}/></button>
           <button onClick={playNext} aria-label="Berikutnya"><Icon name="next" size={22}/></button>
@@ -599,11 +609,16 @@ function App() {
           <label className="switch-row">Aktifkan Dynamic Island<input type="checkbox" checked={dynamicIsland} onChange={event => setDynamicIsland(event.target.checked)}/></label>
           <label>Gaya kapsul<select value={islandStyle} onChange={event => setIslandStyle(event.target.value)}><option value="capsule">Capsule</option><option value="rounded">Rounded</option><option value="minimal">Minimal</option></select></label>
           <label className="range-label">Ukuran <b>{islandSize}%</b><input type="range" min="75" max="120" value={islandSize} onChange={event => setIslandSize(Number(event.target.value))}/></label>
+          <label>Posisi kapsul<select value={islandPosition} onChange={event => setIslandPosition(event.target.value)}><option value="center">Tengah</option><option value="left">Kiri</option><option value="right">Kanan</option></select></label>
+          <label>Preset cahaya<select value={islandPreset} onChange={event => setIslandPreset(event.target.value)}><option value="classic">Classic</option><option value="neon">Neon</option><option value="soft">Soft</option></select></label>
           <label className="switch-row">Cahaya / glow<input type="checkbox" checked={islandGlow} onChange={event => setIslandGlow(event.target.checked)}/></label>
+          <p className="muted-note">Efek kaca penuh diaktifkan bila browser melaporkan dukungan yang sesuai. Browser Android lama memakai kaca ringan.</p>
           <p className="muted-note">Dynamic Island ini tampil di dalam halaman Yinn Lycs. Website tidak dapat membuat overlay mengambang di atas aplikasi Android lain.</p>
         </div>}
         {settingsTab === 'Tentang' && <div className="settings-content"><p>Yinn Lycs v2.0.0</p><p>Semua fitur inti gratis. Streaming, katalog, dan lirik bergantung pada ketersediaan layanan sumber.</p><button className="primary-action" onClick={() => { setSettingsOpen(false); setTab('About') }}>Tentang Yinn Lycs</button></div>}
       </section></div>}
+
+      {showPlayer && <div className="modal-backdrop" onClick={() => setShowPlayer(false)}><section className="full-player glass" onClick={event => event.stopPropagation()}><div className="modal-head"><div><small>NOW PLAYING</small><h2>Music player</h2></div><button onClick={() => setShowPlayer(false)}><Icon name="close"/></button></div><div className="full-art">{activeTrack && getArtwork(activeTrack) ? <img src={getArtwork(activeTrack)} alt=""/> : <Icon name="library" size={64}/>}</div><div className="full-track-meta"><b>{activeTrack?.title || 'Pilih lagu'}</b><span>{activeTrack ? getArtist(activeTrack) : 'Yinn Lycs'}</span></div><div className="full-timeline"><span>{formatDuration(currentTime)}</span><input type="range" min="0" max={duration || 0} step="0.1" value={Math.min(currentTime,duration || 0)} onChange={event => { if(audioRef.current) audioRef.current.currentTime=Number(event.target.value) }}/><span>{formatDuration(duration)}</span></div><div className="full-controls"><button onClick={playPrevious}><Icon name="prev" size={28}/></button><button className="full-play" onClick={togglePlayback}><Icon name={playing ? 'pause' : 'play'} size={27}/></button><button onClick={playNext}><Icon name="next" size={28}/></button></div><label className="full-volume"><Icon name="volume"/><input type="range" min="0" max="1" step=".01" value={volume} onChange={event => setVolume(Number(event.target.value))}/></label><div className="full-shortcuts"><button onClick={() => {setShowPlayer(false);openLyrics()}}><Icon name="lyrics"/>Lirik</button><button onClick={() => {setShowPlayer(false);setShowQueue(true)}}><Icon name="queue"/>Antrean</button><button onClick={shareTrack}><Icon name="share"/>Bagikan</button><button onClick={() => {setShowPlayer(false);setShowSleep(true)}}><Icon name="timer"/>Timer</button></div></section></div>}
 
       {showQueue && <div className="modal-backdrop" onClick={() => setShowQueue(false)}><section className="sheet glass" onClick={event => event.stopPropagation()}><div className="modal-head"><div><small>UP NEXT</small><h2>Antrean lagu</h2></div><button onClick={() => setShowQueue(false)}><Icon name="close"/></button></div><RankedList items={queue.map((track,index) => ({track,count:index+1}))} onPlay={track => { playTrack(track, queue); setShowQueue(false) }}/></section></div>}
 
