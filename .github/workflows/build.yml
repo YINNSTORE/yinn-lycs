@@ -16,5 +16,7 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install
+      - name: Check serverless API syntax
+        run: node --check api/music.js
       - name: Build production bundle
         run: npm run build
