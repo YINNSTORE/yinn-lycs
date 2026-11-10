@@ -249,3 +249,10 @@ img{display:block;max-width:100%}
 .mobile-nav{touch-action:pan-y;user-select:none;-webkit-user-select:none}
 
 .open-island-settings{display:flex;align-items:center;justify-content:space-between;width:100%;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.055);color:var(--accent);padding:11px 13px;font-size:11px;font-weight:800}
+
+.artist-library{display:flex;flex-direction:column;gap:8px}
+.artist-library-row{display:flex;align-items:center;gap:12px;width:100%;border:0;background:rgba(255,255,255,.035);border-radius:17px;padding:9px 12px;text-align:left}
+.artist-library-row>span{width:48px;height:48px;flex:0 0 48px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(140deg,rgba(167,232,255,.25),rgba(180,158,255,.25));color:var(--accent);font-size:18px;font-weight:850}
+.artist-library-row>div{min-width:0;flex:1;display:flex;flex-direction:column;gap:4px}
+.artist-library-row b{font-size:12px}.artist-library-row small{font-size:10px;color:var(--muted)}
+.artist-library-row>svg{color:var(--accent)}
